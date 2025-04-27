@@ -2,16 +2,20 @@
 import React, { useState, useCallback } from 'react';
 import Toolbar from './components/Toolbar';
 import Canvas from './components/Canvas';
+import StatusBar from './components/StatusBar';
+import './App.css';
 
 function App() {
   const [activeTool, setActiveTool] = useState('select');
   const [toolOptions, setToolOptions] = useState({
-    color: '#000000',
-    strokeWidth: 2,
-    brushWidth: 5,
+    color: '#6a1b9a',
+    strokeWidth: 4,
+    brushWidth: 8,
     fill: 'transparent',
     sides: 5,
     fontSize: 20,
+    scale: 1,
+    unit: 'px',
   });
 
   const handleClear = useCallback(() => {
@@ -19,8 +23,8 @@ function App() {
   }, []);
 
   return (
-    <div style={{ padding: 20 }}>
-      <h2>Fabric.js Paint App</h2>
+    <div className="app-container">
+      <h2 className="app-title">🐾 IgorStudio </h2>
       <Toolbar
         activeTool={activeTool}
         onToolChange={setActiveTool}
@@ -28,10 +32,8 @@ function App() {
         onOptionChange={setToolOptions}
         onClear={handleClear}
       />
-      <Canvas
-        activeTool={activeTool}
-        toolOptions={toolOptions}
-      />
+      <Canvas activeTool={activeTool} toolOptions={toolOptions} />
+      <StatusBar activeTool={activeTool} />
     </div>
   );
 }

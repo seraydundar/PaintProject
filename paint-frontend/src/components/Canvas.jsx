@@ -12,151 +12,158 @@ const getPolygonPoints = (cx, cy, radius, sides) => {
 
 export default function Canvas({ activeTool, toolOptions }) {
   const containerRef = useRef(null);
-  const canvasRef     = useRef(null);
-  const canvas        = useRef(null);
+  const canvasRef    = useRef(null);
+  const svgInputRef  = useRef(null);
+  const pngInputRef  = useRef(null);
+  const canvas       = useRef(null);
+  const measurePts   = useRef([]);
 
-  // 1) Init + resize
+  // 1) Init & resize
   useEffect(() => {
     const c = new fabric.Canvas(canvasRef.current, {
       backgroundColor: '#ffffff',
-      selection: activeTool === 'select',
+      selection: true    // başlangıçta seçim açık, tool logic sonrası güncelleniyor
     });
     canvas.current = c;
 
-    const resize = () => {
+    const onResize = () => {
       if (!containerRef.current) return;
       const { clientWidth: w, clientHeight: h } = containerRef.current;
       c.setDimensions({ width: w, height: h });
       c.renderAll();
     };
-    resize();
-    window.addEventListener('resize', resize);
+    onResize();
+    window.addEventListener('resize', onResize);
     return () => {
-      window.removeEventListener('resize', resize);
+      window.removeEventListener('resize', onResize);
       c.dispose();
     };
-  }, []);
+  }, []); // activeTool artık kullanılmıyor, ESLint uyarısı kalmayacak
 
   // 2) Clear handler
   useEffect(() => {
-    const clearHandler = () => {
+    const handler = () => {
       const c = canvas.current;
       if (!c) return;
-      const actives = c.getActiveObjects();
-      if (actives.length) {
-        actives.forEach(o => c.remove(o));
+      const sel = c.getActiveObjects();
+      if (sel.length) {
+        sel.forEach(o => c.remove(o));
         c.discardActiveObject();
       } else {
         c.clear();
         c.backgroundColor = '#ffffff';
       }
-      c.requestRenderAll();
+      c.renderAll();
     };
-    window.addEventListener('canvas:clear', clearHandler);
-    return () => window.removeEventListener('canvas:clear', clearHandler);
+    window.addEventListener('canvas:clear', handler);
+    return () => window.removeEventListener('canvas:clear', handler);
   }, []);
 
-  // 3) Font size canlı güncelleme (text seçili ve edit halindeyse)
-  useEffect(() => {
-    const c = canvas.current;
-    if (!c) return;
-    if (activeTool === 'text') {
-      const obj = c.getActiveObject();
-      if (obj?.type === 'i-text') {
-        obj.set({ fontSize: toolOptions.fontSize });
-        c.requestRenderAll();
-      }
-    }
-  }, [toolOptions.fontSize, activeTool]);
-
-  // 4) Araç logic
+  // 3) Export & import triggers
   useEffect(() => {
     const c = canvas.current;
     if (!c) return;
 
-    // Reset
+    const saveSVG = () => {
+      const blob = new Blob([c.toSVG()], { type: 'image/svg+xml' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'canvas.svg'; a.click();
+      URL.revokeObjectURL(url);
+    };
+    const savePNG = () => {
+      const dataURL = c.toDataURL({ format: 'png' });
+      const a = document.createElement('a');
+      a.href = dataURL; a.download = 'canvas.png'; a.click();
+    };
+    const triggerSVG = () => svgInputRef.current?.click();
+    const triggerPNG = () => pngInputRef.current?.click();
+
+    window.addEventListener('canvas:export-svg', saveSVG);
+    window.addEventListener('canvas:export-png', savePNG);
+    window.addEventListener('canvas:import-svg', triggerSVG);
+    window.addEventListener('canvas:import-png', triggerPNG);
+
+    return () => {
+      window.removeEventListener('canvas:export-svg', saveSVG);
+      window.removeEventListener('canvas:export-png', savePNG);
+      window.removeEventListener('canvas:import-svg', triggerSVG);
+      window.removeEventListener('canvas:import-png', triggerPNG);
+    };
+  }, []);
+
+  // 4) Tool logic
+  useEffect(() => {
+    const c = canvas.current;
+    if (!c) return;
+
     c.isDrawingMode = false;
     ['mouse:down','mouse:move','mouse:up'].forEach(evt => c.off(evt));
     c.selection     = activeTool === 'select';
     c.defaultCursor = 'default';
+    measurePts.current = [];
 
-    const { color, strokeWidth, brushWidth, sides, fontSize, fill } = toolOptions;
+    const { color, strokeWidth, brushWidth, sides, fontSize, fill, scale, unit } = toolOptions;
 
     switch (activeTool) {
-
       case 'brush': {
         c.isDrawingMode = true;
         const brush = new fabric.PencilBrush(c);
-        brush.color = color;
-        brush.width = brushWidth;
+        brush.color = color; brush.width = brushWidth;
         c.freeDrawingBrush = brush;
         break;
       }
-
       case 'line': {
         let line;
         c.on('mouse:down', e => {
           const p = c.getPointer(e.e);
           line = new fabric.Line([p.x,p.y,p.x,p.y], {
-            stroke: color, strokeWidth, selectable: false
+            stroke: color, strokeWidth, selectable:false
           });
           c.add(line);
         });
         c.on('mouse:move', e => {
           if (!line) return;
           const p = c.getPointer(e.e);
-          line.set({ x2: p.x, y2: p.y });
-          c.requestRenderAll();
+          line.set({ x2:p.x, y2:p.y });
+          c.renderAll();
         });
         c.on('mouse:up', () => {
-          if (line) line.setCoords();
+          line?.setCoords();
           line = null;
         });
         break;
       }
-
       case 'rect': {
         let rect;
         c.on('mouse:down', e => {
           const p = c.getPointer(e.e);
           rect = new fabric.Rect({
-            left: p.x, top: p.y,
-            width: 0, height: 0,
-            fill: 'transparent',           // transparan
-            stroke: color,
-            strokeWidth,
-            selectable: false
+            left:p.x, top:p.y, width:0, height:0,
+            fill:'transparent', stroke:color, strokeWidth, selectable:false
           });
           c.add(rect);
         });
         c.on('mouse:move', e => {
           if (!rect) return;
           const p = c.getPointer(e.e);
-          rect.set({
-            width: p.x - rect.left,
-            height: p.y - rect.top
-          });
-          c.requestRenderAll();
+          rect.set({ width:p.x-rect.left, height:p.y-rect.top });
+          c.renderAll();
         });
         c.on('mouse:up', () => {
-          if (rect) rect.setCoords();
+          rect?.setCoords();
           rect = null;
         });
         break;
       }
-
       case 'ellipse': {
         let ellipse;
         c.on('mouse:down', e => {
           const p = c.getPointer(e.e);
           ellipse = new fabric.Ellipse({
-            left: p.x, top: p.y,
-            rx: 0, ry: 0,
-            originX: 'left', originY: 'top',
-            fill: 'transparent',           // transparan
-            stroke: color,
-            strokeWidth,
-            selectable: false
+            left:p.x, top:p.y, rx:0, ry:0,
+            originX:'left', originY:'top',
+            fill:'transparent', stroke:color, strokeWidth, selectable:false
           });
           c.add(ellipse);
         });
@@ -164,75 +171,98 @@ export default function Canvas({ activeTool, toolOptions }) {
           if (!ellipse) return;
           const p = c.getPointer(e.e);
           ellipse.set({
-            rx: Math.abs(p.x - ellipse.left) / 2,
-            ry: Math.abs(p.y - ellipse.top) / 2
+            rx: Math.abs(p.x-ellipse.left)/2,
+            ry: Math.abs(p.y-ellipse.top)/2
           });
-          c.requestRenderAll();
+          c.renderAll();
         });
         c.on('mouse:up', () => {
-          if (ellipse) ellipse.setCoords();
+          ellipse?.setCoords();
           ellipse = null;
         });
         break;
       }
-
       case 'polygon': {
-        let clickCount = 0;
-        let center = { x: 0, y: 0 };
+        let clicks = 0, ctr = {x:0,y:0};
         c.defaultCursor = 'crosshair';
         c.on('mouse:down', e => {
           const p = c.getPointer(e.e);
-          if (clickCount === 0) {
-            center = { ...p };
-            clickCount = 1;
+          if (clicks === 0) {
+            ctr = {...p};
+            clicks = 1;
           } else {
-            const dx = p.x - center.x, dy = p.y - center.y;
-            const radius = Math.hypot(dx, dy);
-            const points = getPolygonPoints(center.x, center.y, radius, sides);
-            const poly = new fabric.Polygon(points, {
-              fill: 'transparent',         // transparan
-              stroke: color,
-              strokeWidth
+            const dx = p.x - ctr.x, dy = p.y - ctr.y;
+            const r = Math.hypot(dx,dy);
+            const pts = getPolygonPoints(ctr.x, ctr.y, r, sides);
+            const poly = new fabric.Polygon(pts, {
+              fill: 'transparent', stroke: color, strokeWidth
             });
-            c.add(poly);
-            poly.setCoords();
-            c.renderAll();
-            clickCount = 0;
+            c.add(poly); poly.setCoords(); c.renderAll();
+            clicks = 0;
           }
         });
         break;
       }
-
       case 'text': {
         c.defaultCursor = 'text';
         c.on('mouse:down', e => {
           const p = c.getPointer(e.e);
           const txt = new fabric.IText('Text', {
-            left: p.x, top: p.y,
-            fill: color,
-            fontSize,
-            selectable: true
+            left: p.x, top: p.y, fill: color, fontSize, selectable: true
           });
-          c.add(txt);
-          c.setActiveObject(txt);
-          txt.enterEditing();
-          txt.selectAll();
+          c.add(txt); c.setActiveObject(txt);
+          txt.enterEditing(); txt.selectAll();
         });
         break;
       }
-
       case 'fill': {
         c.defaultCursor = 'pointer';
         c.on('mouse:down', e => {
-          const target = c.findTarget(e.e, true);
-          if (target && target.set) {
-            target.set('fill', fill);
+          const t = c.findTarget(e.e, true);
+          if (t) {
+            t.set('fill', fill);
             c.requestRenderAll();
           }
         });
         break;
       }
-
+      case 'measure': {
+        c.defaultCursor = 'crosshair';
+        c.on('mouse:down', e => {
+          const p = c.getPointer(e.e);
+          const pts = measurePts.current;
+          if (pts.length === 0) {
+            pts.push(p);
+          } else {
+            pts.push(p);
+            const [p1, p2] = pts;
+            const line = new fabric.Line([p1.x,p1.y,p2.x,p2.y], {
+              stroke: color, strokeWidth, selectable: true
+            });
+            c.add(line);
+            const dx = p2.x - p1.x, dy = p2.y - p1.y;
+            const distPx = Math.hypot(dx,dy);
+            let label = `${distPx.toFixed(0)} px`;
+            if (scale > 0 && unit) {
+              const real = distPx / scale;
+              label += ` (${real.toFixed(2)} ${unit})`;
+            }
+            const midX = (p1.x + p2.x) / 2;
+            const midY = (p1.y + p2.y) / 2 - 20;
+            const txt = new fabric.Text(label, {
+              left: midX,
+              top: midY,
+              fill: color,
+              fontSize: 14,
+              selectable: true
+            });
+            c.add(txt);
+            c.renderAll();
+            measurePts.current = [];
+          }
+        });
+        break;
+      }
       default:
         break;
     }
@@ -244,15 +274,73 @@ export default function Canvas({ activeTool, toolOptions }) {
     };
   }, [activeTool, toolOptions]);
 
-  // 5) Render
+  // 5) Render + hidden inputs
   return (
-    <div
-      ref={containerRef}
-      style={{ width: '100vw', height: 'calc(100vh - 60px)' }}
-    >
+    <div ref={containerRef} style={{ width: '100vw', height: 'calc(100vh - 60px)' }}>
       <canvas
         ref={canvasRef}
-        style={{ display:'block', width:'100%', height:'100%' }}
+        style={{ display: 'block', width: '100%', height: '100%' }}
+      />
+
+      {/* ——— SVG Yükleme ——— */}
+      <input
+        type="file"
+        accept=".svg"
+        ref={svgInputRef}
+        style={{ display: 'none' }}
+        onChange={e => {
+          const file = e.target.files[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = ({ target }) => {
+            fabric.loadSVGFromString(target.result, (objects, options) => {
+              const c = canvas.current;
+              c.getObjects().forEach(o => c.remove(o));
+              const svgGroup = fabric.util.groupSVGElements(objects, options);
+              svgGroup.set({
+                left: c.getWidth() / 2,
+                top: c.getHeight() / 2,
+                originX: 'center',
+                originY: 'center',
+              });
+              c.add(svgGroup).setActiveObject(svgGroup);
+              c.requestRenderAll();
+            });
+          };
+          reader.readAsText(file);
+          e.target.value = '';
+        }}
+      />
+
+      {/* ——— PNG Yükleme ——— */}
+      <input
+        type="file"
+        accept="image/png"
+        ref={pngInputRef}
+        style={{ display: 'none' }}
+        onChange={e => {
+          const file = e.target.files[0];
+          if (!file) return;
+          const url = URL.createObjectURL(file);
+          fabric.Image.fromURL(url, img => {
+            const c = canvas.current;
+            c.getObjects().forEach(o => c.remove(o));
+            const cw = c.getWidth(), ch = c.getHeight();
+            const scale = Math.min(cw / img.width, ch / img.height, 1);
+            img.set({
+              left: cw / 2,
+              top: ch / 2,
+              originX: 'center',
+              originY: 'center',
+              scaleX: scale,
+              scaleY: scale,
+            });
+            c.add(img).setActiveObject(img);
+            c.requestRenderAll();
+            URL.revokeObjectURL(url);
+          });
+          e.target.value = '';
+        }}
       />
     </div>
   );

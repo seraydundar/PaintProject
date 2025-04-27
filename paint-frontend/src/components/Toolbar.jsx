@@ -1,125 +1,130 @@
 // src/components/Toolbar.jsx
 import React from 'react';
+import '../App.css';
 
-export default function Toolbar({
-  activeTool, onToolChange,
-  toolOptions, onOptionChange,
-  onClear
-}) {
-  const tools = [
-    'select', 'brush', 'line',
-    'rect', 'ellipse', 'polygon',
-    'text', 'fill'
-  ];
+const TOOL_ICONS = {
+  select: '🖱️',
+  brush: '🖌️',
+  line: '✏️',
+  rect: '▭',
+  ellipse: '◯',
+  polygon: '🔷',
+  text: '📝',
+  fill: '🎨',
+  measure: '📏',
+};
+
+export default function Toolbar({ activeTool, onToolChange, toolOptions, onOptionChange, onClear }) {
+  const tools = Object.keys(TOOL_ICONS).map(key => ({ key, icon: TOOL_ICONS[key] }));
 
   return (
-    <div style={{
-      display: 'flex',
-      gap: 8,
-      alignItems: 'center',
-      marginBottom: 12
-    }}>
+    <div className="toolbar-container">
       {tools.map(tool => (
         <button
-          key={tool}
-          style={{
-            padding: '6px 12px',
-            background: activeTool === tool ? '#555' : '#eee',
-            color: activeTool === tool ? '#fff' : '#000',
-            border: 'none',
-            borderRadius: 4,
-            cursor: 'pointer'
-          }}
-          onClick={() => onToolChange(tool)}
+          key={tool.key}
+          className={`tool-button ${activeTool === tool.key ? 'active' : ''}`}
+          data-tooltip={tool.key.charAt(0).toUpperCase() + tool.key.slice(1)}
+          onClick={() => onToolChange(tool.key)}
         >
-          {tool.charAt(0).toUpperCase() + tool.slice(1)}
+          {tool.icon}
         </button>
       ))}
 
-      {/* Çizgi/Renk: */}
-      <label style={{ display:'flex', alignItems:'center', gap:4 }}>
+      {/* Renk, Dolgu, Kalınlık etc. seçenekler */}
+      <label className="toolbar-option">
         <span>Renk:</span>
         <input
           type="color"
           value={toolOptions.color}
-          onChange={e =>
-            onOptionChange({ ...toolOptions, color: e.target.value })
-          }
+          onChange={e => onOptionChange({ ...toolOptions, color: e.target.value })}
         />
       </label>
-
-      {/* Dolgu Rengi: */}
-      <label style={{ display:'flex', alignItems:'center', gap:4 }}>
+      <label className="toolbar-option">
         <span>Dolgu:</span>
         <input
           type="color"
           value={toolOptions.fill}
-          onChange={e =>
-            onOptionChange({ ...toolOptions, fill: e.target.value })
-          }
+          onChange={e => onOptionChange({ ...toolOptions, fill: e.target.value })}
         />
       </label>
-
-      {/* Kalınlık */}
-      <label style={{ display:'flex', alignItems:'center', gap:4 }}>
+      <label className="toolbar-option">
         <span>Kalınlık:</span>
         <input
           type="number" min={1} max={50}
           value={toolOptions.strokeWidth}
-          onChange={e =>
-            onOptionChange({
-              ...toolOptions,
-              strokeWidth: parseInt(e.target.value, 10)
-            })
-          }
-          style={{ width:60 }}
+          onChange={e => onOptionChange({ ...toolOptions, strokeWidth: parseInt(e.target.value, 10) })}
         />
       </label>
 
       {activeTool === 'polygon' && (
-        <label style={{ display:'flex', alignItems:'center', gap:4 }}>
+        <label className="toolbar-option">
           <span>Kenar:</span>
           <input
             type="number" min={3} max={12}
             value={toolOptions.sides}
-            onChange={e =>
-              onOptionChange({
-                ...toolOptions,
-                sides: parseInt(e.target.value, 10)
-              })
-            }
-            style={{ width:60 }}
+            onChange={e => onOptionChange({ ...toolOptions, sides: parseInt(e.target.value, 10) })}
           />
         </label>
       )}
 
       {activeTool === 'text' && (
-        <label style={{ display:'flex', alignItems:'center', gap:4 }}>
+        <label className="toolbar-option">
           <span>Font:</span>
           <input
             type="number" min={8} max={72}
             value={toolOptions.fontSize}
-            onChange={e =>
-              onOptionChange({
-                ...toolOptions,
-                fontSize: parseInt(e.target.value, 10)
-              })
-            }
-            style={{ width:60 }}
+            onChange={e => onOptionChange({ ...toolOptions, fontSize: parseInt(e.target.value, 10) })}
           />
         </label>
       )}
 
+      {activeTool === 'measure' && (
+        <>
+          <label className="toolbar-option">
+            <span>Ölçek:</span>
+            <input
+              type="number" min={1}
+              value={toolOptions.scale}
+              onChange={e => onOptionChange({ ...toolOptions, scale: parseFloat(e.target.value) || 1 })}
+            />
+          </label>
+          <label className="toolbar-option">
+            <span>Birim:</span>
+            <input
+              type="text"
+              value={toolOptions.unit}
+              onChange={e => onOptionChange({ ...toolOptions, unit: e.target.value })}
+            />
+          </label>
+        </>
+      )}
+
+      {/* Dosya ve Temizleme Butonları */}
       <button
+        className="tool-button clear-button"
+        data-tooltip="Temizle"
         onClick={onClear}
-        style={{
-          padding:'6px 12px', marginLeft:'auto',
-          background:'#d9534f', color:'#fff',
-          border:'none', borderRadius:4
-        }}
-      >
-        Temizle
-      </button>
+      >🗑️</button>
+      <button
+        className="tool-button"
+        data-tooltip="SVG Kaydet"
+        onClick={() => window.dispatchEvent(new Event('canvas:export-svg'))}
+      >💾</button>
+      <button
+        className="tool-button"
+        data-tooltip="PNG Kaydet"
+        onClick={() => window.dispatchEvent(new Event('canvas:export-png'))}
+      >🖼️</button>
+      <button
+        className="tool-button"
+        data-tooltip="SVG Yükle"
+        onClick={() => window.dispatchEvent(new Event('canvas:import-svg'))}
+      >📂</button>
+      <button
+        className="tool-button"
+        data-tooltip="PNG Yükle"
+        onClick={() => window.dispatchEvent(new Event('canvas:import-png'))}
+      >📥</button>
     </div>
   );
 }
