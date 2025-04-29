@@ -5,7 +5,10 @@ import '../App.css';
 export default function StatusBar({ activeTool }) {
   return (
     <div className="status-bar">
-      Aktif Araç: <span className="status-tool">{activeTool.charAt(0).toUpperCase() + activeTool.slice(1)}</span>
+      Aktif Araç:{' '}
+      <span className="status-tool">
+        {activeTool.charAt(0).toUpperCase() + activeTool.slice(1)}
+      </span>
     </div>
   );
 }
