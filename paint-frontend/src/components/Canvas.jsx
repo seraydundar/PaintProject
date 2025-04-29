@@ -18,55 +18,69 @@ export default function Canvas({ activeTool, toolOptions }) {
   const canvas       = useRef(null);
   const measurePts   = useRef([]);
 
-  // PNG yükleme handler
-  function handlePngUpload(e) {
-    const file = e.target.files[0];
-    if (!file) return;
+// PNG yükleme handler - birden fazla dosya desteklenir
+function handlePngUpload(e) {
+  const files = Array.from(e.target.files);
+  if (files.length === 0) return;
+  files.forEach(file => {
     const reader = new FileReader();
     reader.onload = ({ target }) => {
       const imgEl = new Image();
       imgEl.onload = () => {
         const fImg = new fabric.Image(imgEl, {
-          left:       canvas.current.getWidth() / 2,
+          left:       canvas.current.getWidth()  / 2,
           top:        canvas.current.getHeight() / 2,
           originX:    'center',
           originY:    'center',
-          selectable: true,
-          evented:    true
         });
-        canvas.current.add(fImg).setActiveObject(fImg);
+        // Taşınabilir ve ölçeklenebilir olsun
+        fImg.set({
+          selectable: true,
+          evented:    true,
+        });
+        canvas.current.add(fImg);
+        canvas.current.setActiveObject(fImg);
         canvas.current.renderAll();
       };
       imgEl.src = target.result;
     };
     reader.readAsDataURL(file);
-    e.target.value = '';
-  }
+  });
+  e.target.value = '';
+}
 
-  // SVG yükleme handler
-  function handleSvgUpload(e) {
-    const file = e.target.files[0];
-    if (!file) return;
+// SVG yükleme handler - birden fazla dosya desteklenir
+function handleSvgUpload(e) {
+  const files = Array.from(e.target.files);
+  if (files.length === 0) return;
+  files.forEach(file => {
     const reader = new FileReader();
     reader.onload = ({ target }) => {
       const imgEl = new Image();
       imgEl.onload = () => {
         const fImg = new fabric.Image(imgEl, {
-          left:       canvas.current.getWidth() / 2,
+          left:       canvas.current.getWidth()  / 2,
           top:        canvas.current.getHeight() / 2,
           originX:    'center',
           originY:    'center',
-          selectable: true,
-          evented:    true
         });
-        canvas.current.add(fImg).setActiveObject(fImg);
+        // Taşınabilir ve ölçeklenebilir olsun
+        fImg.set({
+          selectable: true,
+          evented:    true,
+        });
+        canvas.current.add(fImg);
+        canvas.current.setActiveObject(fImg);
         canvas.current.renderAll();
       };
       imgEl.src = target.result;
     };
-    reader.readAsText(file);
-    e.target.value = '';
-  }
+    reader.readAsDataURL(file);
+  });
+  e.target.value = '';
+}
+
+
 
   // 1) Canvas init & resize
   useEffect(() => {
@@ -303,7 +317,8 @@ export default function Canvas({ activeTool, toolOptions }) {
               fontSize,
               selectable: true
             });
-            c.add(txt).setActiveObject(txt);
+            c.add(txt);
+            c.setActiveObject(txt);
             txt.enterEditing();
             txt.selectAll();
           }
@@ -341,7 +356,8 @@ export default function Canvas({ activeTool, toolOptions }) {
             selectable: false,
             evented:    false
           });
-          c.add(previewLine, previewText);
+          c.add(previewLine);
+          c.add(previewText);
         };
 
         const onMouseMove = e => {
@@ -350,9 +366,9 @@ export default function Canvas({ activeTool, toolOptions }) {
           previewLine.set({ x2: p.x, y2: p.y });
           const dist = Math.hypot(p.x - start.x, p.y - start.y);
           let label = `${dist.toFixed(0)} px`;
-          if (scale > 0 && unit) label += ` (${(dist/scale).toFixed(
-            2
-          )} ${unit})`;
+          if (scale > 0 && unit) {
+            label += ` (${(dist / scale).toFixed(2)} ${unit})`;
+          }
           previewText.set({
             text:  label,
             left:  (start.x + p.x) / 2,
@@ -401,12 +417,13 @@ export default function Canvas({ activeTool, toolOptions }) {
 
       {/* SVG Import */}
       <input
-        type="file"
-        accept=".svg"
-        ref={svgInputRef}
-        style={{ display: 'none' }}
-        onChange={handleSvgUpload}
-      />
+  type="file"
+  accept=".svg"
+  ref={svgInputRef}
+  style={{ display: 'none' }}
+  onChange={handleSvgUpload}
+/>
+
 
       {/* PNG Import */}
       <input

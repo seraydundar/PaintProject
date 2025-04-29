@@ -24,7 +24,7 @@ function App() {
 
   return (
     <div className="app-container">
-      <h2 className="app-title">🐾 Latte Studio </h2>
+      <h2 className="app-title">🐾 IgorStudio </h2>
       <Toolbar
         activeTool={activeTool}
         onToolChange={setActiveTool}

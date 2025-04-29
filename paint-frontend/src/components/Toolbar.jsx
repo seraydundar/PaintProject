@@ -1,4 +1,3 @@
-// src/components/Toolbar.jsx
 import React from 'react';
 import '../App.css';
 
@@ -64,7 +63,7 @@ export default function Toolbar({
         </button>
       ))}
 
-      {/* Renk Seçici */}
+      {/* Renk Seçici (her zaman görünür) */}
       <label className="toolbar-option">
         <span>Renk:</span>
         <input
@@ -76,19 +75,21 @@ export default function Toolbar({
         />
       </label>
 
-      {/* Dolgu Rengi */}
-      <label className="toolbar-option">
-        <span>Dolgu:</span>
-        <input
-          type="color"
-          value={fill ?? '#000000'}
-          onChange={e =>
-            onOptionChange({ ...toolOptions, fill: e.target.value })
-          }
-        />
-      </label>
+      {/* Dolgu Rengi, yalnızca 'fill' aracı seçili iken */}
+      {activeTool === 'fill' && (
+        <label className="toolbar-option">
+          <span>Dolgu:</span>
+          <input
+            type="color"
+            value={fill ?? '#000000'}
+            onChange={e =>
+              onOptionChange({ ...toolOptions, fill: e.target.value })
+            }
+          />
+        </label>
+      )}
 
-      {/* Boyut (tüm araçlarda) */}
+      {/* Boyut (slider + sayı girişi) */}
       <label className="toolbar-option">
         <span>Boyut:</span>
         <input
@@ -98,7 +99,15 @@ export default function Toolbar({
           value={currentSize}
           onChange={handleSizeChange}
         />
-        <span>{currentSize}px</span>
+        <input
+          type="number"
+          min={1}
+          max={100}
+          value={currentSize}
+          onChange={handleSizeChange}
+          style={{ width: '50px', marginLeft: '8px', padding: '2px' }}
+        />
+        <span style={{ marginLeft: '4px' }}>px</span>
       </label>
 
       {/* Polygon Kenar Sayısı */}
@@ -119,8 +128,6 @@ export default function Toolbar({
           />
         </label>
       )}
-
-      {/* Ölçek ve Birim kontrolleri kaldırıldı */}
 
       {/* Temizle ve Kaydet/Yükle */}
       <button
