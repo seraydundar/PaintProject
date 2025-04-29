@@ -22,7 +22,7 @@ export default function Canvas({ activeTool, toolOptions }) {
   useEffect(() => {
     const c = new fabric.Canvas(canvasRef.current, {
       backgroundColor: '#ffffff',
-      selection: true    // başlangıçta seçim açık, tool logic sonrası güncelleniyor
+      selection: true
     });
     canvas.current = c;
 
@@ -38,7 +38,7 @@ export default function Canvas({ activeTool, toolOptions }) {
       window.removeEventListener('resize', onResize);
       c.dispose();
     };
-  }, []); // activeTool artık kullanılmıyor, ESLint uyarısı kalmayacak
+  }, []);
 
   // 2) Clear handler
   useEffect(() => {
@@ -59,7 +59,7 @@ export default function Canvas({ activeTool, toolOptions }) {
     return () => window.removeEventListener('canvas:clear', handler);
   }, []);
 
-  // 3) Export & import triggers
+  // 3) Export & import triggers (SVG & PNG only)
   useEffect(() => {
     const c = canvas.current;
     if (!c) return;
@@ -98,7 +98,7 @@ export default function Canvas({ activeTool, toolOptions }) {
     if (!c) return;
 
     c.isDrawingMode = false;
-    ['mouse:down','mouse:move','mouse:up'].forEach(evt => c.off(evt));
+    ['mouse:down', 'mouse:move', 'mouse:up'].forEach(evt => c.off(evt));
     c.selection     = activeTool === 'select';
     c.defaultCursor = 'default';
     measurePts.current = [];
@@ -109,7 +109,8 @@ export default function Canvas({ activeTool, toolOptions }) {
       case 'brush': {
         c.isDrawingMode = true;
         const brush = new fabric.PencilBrush(c);
-        brush.color = color; brush.width = brushWidth;
+        brush.color = color;
+        brush.width = brushWidth;
         c.freeDrawingBrush = brush;
         break;
       }
@@ -117,15 +118,13 @@ export default function Canvas({ activeTool, toolOptions }) {
         let line;
         c.on('mouse:down', e => {
           const p = c.getPointer(e.e);
-          line = new fabric.Line([p.x,p.y,p.x,p.y], {
-            stroke: color, strokeWidth, selectable:false
-          });
+          line = new fabric.Line([p.x, p.y, p.x, p.y], { stroke: color, strokeWidth, selectable: false });
           c.add(line);
         });
         c.on('mouse:move', e => {
           if (!line) return;
           const p = c.getPointer(e.e);
-          line.set({ x2:p.x, y2:p.y });
+          line.set({ x2: p.x, y2: p.y });
           c.renderAll();
         });
         c.on('mouse:up', () => {
@@ -138,20 +137,18 @@ export default function Canvas({ activeTool, toolOptions }) {
         let rect;
         c.on('mouse:down', e => {
           const p = c.getPointer(e.e);
-          rect = new fabric.Rect({
-            left:p.x, top:p.y, width:0, height:0,
-            fill:'transparent', stroke:color, strokeWidth, selectable:false
-          });
+          rect = new fabric.Rect({ left: p.x, top: p.y, width: 0, height: 0, fill: 'transparent', stroke: color, strokeWidth, selectable: false });
           c.add(rect);
         });
         c.on('mouse:move', e => {
           if (!rect) return;
           const p = c.getPointer(e.e);
-          rect.set({ width:p.x-rect.left, height:p.y-rect.top });
+          rect.set({ left: Math.min(p.x, rect.left), top: Math.min(p.y, rect.top), width: Math.abs(p.x - rect.left), height: Math.abs(p.y - rect.top) });
           c.renderAll();
         });
         c.on('mouse:up', () => {
           rect?.setCoords();
+          rect.set({ selectable: true });
           rect = null;
         });
         break;
@@ -160,58 +157,67 @@ export default function Canvas({ activeTool, toolOptions }) {
         let ellipse;
         c.on('mouse:down', e => {
           const p = c.getPointer(e.e);
-          ellipse = new fabric.Ellipse({
-            left:p.x, top:p.y, rx:0, ry:0,
-            originX:'left', originY:'top',
-            fill:'transparent', stroke:color, strokeWidth, selectable:false
-          });
+          ellipse = new fabric.Ellipse({ left: p.x, top: p.y, rx: 0, ry: 0, originX: 'center', originY: 'center', fill: 'transparent', stroke: color, strokeWidth, selectable: false });
           c.add(ellipse);
         });
         c.on('mouse:move', e => {
           if (!ellipse) return;
           const p = c.getPointer(e.e);
-          ellipse.set({
-            rx: Math.abs(p.x-ellipse.left)/2,
-            ry: Math.abs(p.y-ellipse.top)/2
-          });
+          const rx = Math.abs(p.x - ellipse.left);
+          const ry = Math.abs(p.y - ellipse.top);
+          ellipse.set({ rx, ry });
           c.renderAll();
         });
         c.on('mouse:up', () => {
           ellipse?.setCoords();
+          ellipse.set({ selectable: true });
           ellipse = null;
         });
         break;
       }
       case 'polygon': {
-        let clicks = 0, ctr = {x:0,y:0};
+        let poly = null;
+        let start = null;
         c.defaultCursor = 'crosshair';
         c.on('mouse:down', e => {
+          start = c.getPointer(e.e);
+          const pts = getPolygonPoints(start.x, start.y, 0, sides);
+          poly = new fabric.Polygon(pts, { fill: 'transparent', stroke: color, strokeWidth, selectable: false });
+          c.add(poly);
+        });
+        c.on('mouse:move', e => {
+          if (!poly) return;
           const p = c.getPointer(e.e);
-          if (clicks === 0) {
-            ctr = {...p};
-            clicks = 1;
-          } else {
-            const dx = p.x - ctr.x, dy = p.y - ctr.y;
-            const r = Math.hypot(dx,dy);
-            const pts = getPolygonPoints(ctr.x, ctr.y, r, sides);
-            const poly = new fabric.Polygon(pts, {
-              fill: 'transparent', stroke: color, strokeWidth
-            });
-            c.add(poly); poly.setCoords(); c.renderAll();
-            clicks = 0;
-          }
+          const r = Math.hypot(p.x - start.x, p.y - start.y);
+          const pts = getPolygonPoints(start.x, start.y, r, sides);
+          poly.set({ points: pts });
+          c.renderAll();
+        });
+        c.on('mouse:up', () => {
+          if (!poly) return;
+          poly.set({ selectable: true });
+          poly.setCoords();
+          poly = null;
         });
         break;
       }
       case 'text': {
         c.defaultCursor = 'text';
-        c.on('mouse:down', e => {
-          const p = c.getPointer(e.e);
-          const txt = new fabric.IText('Text', {
-            left: p.x, top: p.y, fill: color, fontSize, selectable: true
-          });
-          c.add(txt); c.setActiveObject(txt);
-          txt.enterEditing(); txt.selectAll();
+        c.on('mouse:down', opt => {
+          const evt = opt.e;
+          const pointer = c.getPointer(evt);
+          const target = opt.target;
+          if (target && target.isType && target.isType('i-text')) {
+            c.setActiveObject(target);
+            target.enterEditing();
+            target.selectAll();
+          } else {
+            const txt = new fabric.IText('Text', { left: pointer.x, top: pointer.y, fill: color, fontSize, selectable: true });
+            c.add(txt);
+            c.setActiveObject(txt);
+            txt.enterEditing();
+            txt.selectAll();
+          }
         });
         break;
       }
@@ -228,38 +234,37 @@ export default function Canvas({ activeTool, toolOptions }) {
       }
       case 'measure': {
         c.defaultCursor = 'crosshair';
+        let start = null;
+        let previewLine = null;
+        let previewText = null;
+
         c.on('mouse:down', e => {
+          start = c.getPointer(e.e);
+          previewLine = new fabric.Line([start.x, start.y, start.x, start.y], { stroke: color, strokeWidth, selectable: false, evented: false });
+          previewText = new fabric.Text('0 px', { left: start.x, top: start.y - 20, fill: color, fontSize: 14, selectable: false, evented: false });
+          c.add(previewLine);
+          c.add(previewText);
+        });
+        c.on('mouse:move', e => {
+          if (!start || !previewLine) return;
           const p = c.getPointer(e.e);
-          const pts = measurePts.current;
-          if (pts.length === 0) {
-            pts.push(p);
-          } else {
-            pts.push(p);
-            const [p1, p2] = pts;
-            const line = new fabric.Line([p1.x,p1.y,p2.x,p2.y], {
-              stroke: color, strokeWidth, selectable: true
-            });
-            c.add(line);
-            const dx = p2.x - p1.x, dy = p2.y - p1.y;
-            const distPx = Math.hypot(dx,dy);
-            let label = `${distPx.toFixed(0)} px`;
-            if (scale > 0 && unit) {
-              const real = distPx / scale;
-              label += ` (${real.toFixed(2)} ${unit})`;
-            }
-            const midX = (p1.x + p2.x) / 2;
-            const midY = (p1.y + p2.y) / 2 - 20;
-            const txt = new fabric.Text(label, {
-              left: midX,
-              top: midY,
-              fill: color,
-              fontSize: 14,
-              selectable: true
-            });
-            c.add(txt);
-            c.renderAll();
-            measurePts.current = [];
-          }
+          previewLine.set({ x2: p.x, y2: p.y });
+          const dx = p.x - start.x;
+          const dy = p.y - start.y;
+          const distPx = Math.hypot(dx, dy);
+          let label = `${distPx.toFixed(0)} px`;
+          if (scale > 0 && unit) label += ` (${(distPx / scale).toFixed(2)} ${unit})`;
+          previewText.set({ text: label, left: (start.x + p.x) / 2, top: ((start.y + p.y) / 2) - 20 });
+          c.renderAll();
+        });
+        c.on('mouse:up', () => {
+          if (!previewLine) return;
+          previewLine.set({ selectable: true, evented: true });
+          previewLine.setCoords();
+          previewText.set({ selectable: true, evented: true });
+          start = null;
+          previewLine = null;
+          previewText = null;
         });
         break;
       }
@@ -268,7 +273,7 @@ export default function Canvas({ activeTool, toolOptions }) {
     }
 
     return () => {
-      ['mouse:down','mouse:move','mouse:up'].forEach(evt => c.off(evt));
+      ['mouse:down', 'mouse:move', 'mouse:up'].forEach(evt => c.off(evt));
       c.isDrawingMode = false;
       c.defaultCursor = 'default';
     };
@@ -277,12 +282,9 @@ export default function Canvas({ activeTool, toolOptions }) {
   // 5) Render + hidden inputs
   return (
     <div ref={containerRef} style={{ width: '100vw', height: 'calc(100vh - 60px)' }}>
-      <canvas
-        ref={canvasRef}
-        style={{ display: 'block', width: '100%', height: '100%' }}
-      />
+      <canvas ref={canvasRef} style={{ display: 'block', width: '100%', height: '100%' }} />
 
-      {/* ——— SVG Yükleme ——— */}
+      {/* SVG Import */}
       <input
         type="file"
         accept=".svg"
@@ -295,16 +297,11 @@ export default function Canvas({ activeTool, toolOptions }) {
           reader.onload = ({ target }) => {
             fabric.loadSVGFromString(target.result, (objects, options) => {
               const c = canvas.current;
-              c.getObjects().forEach(o => c.remove(o));
+              c.clear();
               const svgGroup = fabric.util.groupSVGElements(objects, options);
-              svgGroup.set({
-                left: c.getWidth() / 2,
-                top: c.getHeight() / 2,
-                originX: 'center',
-                originY: 'center',
-              });
+              svgGroup.set({ left: c.getWidth() / 2, top: c.getHeight() / 2, originX: 'center', originY: 'center' });
               c.add(svgGroup).setActiveObject(svgGroup);
-              c.requestRenderAll();
+              c.renderAll();
             });
           };
           reader.readAsText(file);
@@ -312,7 +309,7 @@ export default function Canvas({ activeTool, toolOptions }) {
         }}
       />
 
-      {/* ——— PNG Yükleme ——— */}
+      {/* PNG Import */}
       <input
         type="file"
         accept="image/png"
@@ -324,19 +321,12 @@ export default function Canvas({ activeTool, toolOptions }) {
           const url = URL.createObjectURL(file);
           fabric.Image.fromURL(url, img => {
             const c = canvas.current;
-            c.getObjects().forEach(o => c.remove(o));
+            c.clear();
             const cw = c.getWidth(), ch = c.getHeight();
             const scale = Math.min(cw / img.width, ch / img.height, 1);
-            img.set({
-              left: cw / 2,
-              top: ch / 2,
-              originX: 'center',
-              originY: 'center',
-              scaleX: scale,
-              scaleY: scale,
-            });
+            img.set({ left: cw / 2, top: ch / 2, originX: 'center', originY: 'center', scaleX: scale, scaleY: scale });
             c.add(img).setActiveObject(img);
-            c.requestRenderAll();
+            c.renderAll();
             URL.revokeObjectURL(url);
           });
           e.target.value = '';
