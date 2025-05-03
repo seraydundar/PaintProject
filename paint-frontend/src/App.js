@@ -17,6 +17,7 @@ function App() {
     scale: 1,
     unit: 'px',
   });
+  const [zoom, setZoom] = useState(1);
 
   const handleClear = useCallback(() => {
     window.dispatchEvent(new Event('canvas:clear'));
@@ -32,8 +33,13 @@ function App() {
         onOptionChange={setToolOptions}
         onClear={handleClear}
       />
-      <Canvas activeTool={activeTool} toolOptions={toolOptions} />
-      <StatusBar activeTool={activeTool} />
+       <Canvas
+       activeTool={activeTool}
+       toolOptions={toolOptions}
+       onZoomChange={setZoom}
+       />
+       <StatusBar activeTool={activeTool} zoom={zoom} />
+
     </div>
   );
 }

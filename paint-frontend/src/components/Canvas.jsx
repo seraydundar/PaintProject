@@ -1,5 +1,5 @@
 // src/components/Canvas.jsx
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as fabric from 'fabric';
 
 const getPolygonPoints = (cx, cy, radius, sides) => {
@@ -10,13 +10,62 @@ const getPolygonPoints = (cx, cy, radius, sides) => {
   }));
 };
 
-export default function Canvas({ activeTool, toolOptions }) {
+export default function Canvas({ activeTool, toolOptions, onZoomChange }) {
   const containerRef = useRef(null);
   const canvasRef    = useRef(null);
   const svgInputRef  = useRef(null);
   const pngInputRef  = useRef(null);
   const canvas       = useRef(null);
   const measurePts   = useRef([]);
+  const [zoom, setZoom] = useState(1);
+
+    // layers state  
+  const [layers, setLayers] = useState([]);              // [{ index, name }]
+  const [selectedLayer, setSelectedLayer] = useState(null);
+  
+  // helper: rebuild layer list from canvas objects  
+  const updateLayers = () => {
+    if (!canvas.current) return;
+    const objs = canvas.current.getObjects();
+    setLayers(objs.map((o, i) => ({ index: i, name: o.type })));
+  };
+
+// bringForward
+const bringForward = idx => {
+  const c = canvas.current;
+  const objs = c._objects;            // doğrudan iç diziye erişim
+  if (idx < objs.length - 1) {
+    const [obj] = objs.splice(idx, 1);  // mevcut konumundan çıkar
+    objs.splice(idx + 1, 0, obj);       // bir üst katmana ekle
+    c.renderAll();
+    updateLayers();
+  }
+};
+
+// sendBackward
+const sendBackward = idx => {
+  const c = canvas.current;
+  const objs = c._objects;
+  if (idx > 0) {
+    const [obj] = objs.splice(idx, 1);  // mevcut konumundan çıkar
+    objs.splice(idx - 1, 0, obj);       // bir alt katmana ekle
+    c.renderAll();
+    updateLayers();
+  }
+};
+
+
+
+
+
+  // select a layer on the canvas  
+  const selectLayer = idx => {
+    const obj = canvas.current.getObjects()[idx];
+    if (!obj) return;
+    canvas.current.setActiveObject(obj);
+    canvas.current.renderAll();
+  };
+
 
 // PNG yükleme handler - birden fazla dosya desteklenir
 function handlePngUpload(e) {
@@ -82,14 +131,20 @@ function handleSvgUpload(e) {
 
 
 
-  // 1) Canvas init & resize
+  // 1) Canvas init, resize ve wheel zoom
+  
   useEffect(() => {
     const c = new fabric.Canvas(canvasRef.current, {
       backgroundColor: '#ffffff',
       selection: true
     });
     canvas.current = c;
+    setZoom(c.getZoom());
+    onZoomChange?.(c.getZoom());
 
+    updateLayers();
+
+    // resize handler  
     const onResize = () => {
       if (!containerRef.current) return;
       const { clientWidth: w, clientHeight: h } = containerRef.current;
@@ -98,11 +153,34 @@ function handleSvgUpload(e) {
     };
     onResize();
     window.addEventListener('resize', onResize);
+
+    // wheel zoom (%50–%200)  
+    const onWheel = opt => {
+      const delta = opt.e.deltaY;
+      let newZoom = c.getZoom() * (0.999 ** delta);
+      newZoom = Math.max(0.5, Math.min(newZoom, 2));
+      c.zoomToPoint({ x: opt.e.offsetX, y: opt.e.offsetY }, newZoom);
+      setZoom(newZoom);
+      onZoomChange?.(newZoom);
+      opt.e.preventDefault();
+      opt.e.stopPropagation();
+    };
+    c.on('mouse:wheel', onWheel);
+
+    // keep layers up-to-date  
+    c.on('object:added',   updateLayers);
+    c.on('object:removed', updateLayers);
+    c.on('object:modified', updateLayers);
+
     return () => {
       window.removeEventListener('resize', onResize);
+      c.off('mouse:wheel', onWheel);
+      c.off('object:added',   updateLayers);
+      c.off('object:removed', updateLayers);
+      c.off('object:modified', updateLayers);
       c.dispose();
     };
-  }, []);
+  }, [onZoomChange]);
 
   // 2) Clear handler
   useEffect(() => {
@@ -415,6 +493,63 @@ function handleSvgUpload(e) {
         style={{ display: 'block', width: '100%', height: '100%' }}
       />
 
+      {/* gizli import input’lar */}
+      <input
+        type="file"
+        accept=".svg"
+        ref={svgInputRef}
+        style={{ display: 'none' }}
+        onChange={handleSvgUpload}
+      />
+      <input
+        type="file"
+        accept="image/*"
+        ref={pngInputRef}
+        style={{ display: 'none' }}
+        onChange={handlePngUpload}
+      />
+
+      {/* zoom göstergesi (alt sağdaki artık opsiyonel istersen kaldırabilirsiniz) */}
+      <div
+        className="zoom-indicator"
+        onClick={() => {
+          canvas.current.setViewportTransform([1, 0, 0, 1, 0, 0]);
+          canvas.current.setZoom(1);
+          setZoom(1);
+          onZoomChange?.(1);
+        }}
+      >
+        Zoom: {Math.round(zoom * 100)}%
+      </div>
+
+      {/* —— Layer Panel —— */}
+      <div className="layers-panel">
+        <h4>Layers</h4>
+        <ul>
+          {layers.map(layer => (
+            <li
+              key={layer.index}
+              className={selectedLayer === layer.index ? 'selected' : ''}
+            >
+              <span
+                onClick={() => {
+                  selectLayer(layer.index);
+                  setSelectedLayer(layer.index);
+                }}
+              >
+                {layer.name} #{layer.index}
+              </span>
+              <button onClick={() => bringForward(layer.index)}>↑</button>
+              <button onClick={() => sendBackward(layer.index)}>↓</button>
+            </li>
+          ))}
+        </ul>
+      </div>
+  
+  
+
+
+
       {/* SVG Import */}
       <input
   type="file"
@@ -433,6 +568,20 @@ function handleSvgUpload(e) {
         style={{ display: 'none' }}
         onChange={handlePngUpload}
       />
+    
+  
+  /* Yeni: Zoom gösterge */
+  <div
+        className="zoom-indicator"
+        onClick={() => {
+          canvas.current.setViewportTransform([1, 0, 0, 1, 0, 0]);
+          canvas.current.setZoom(1);
+          setZoom(1);
+          onZoomChange?.(1);
+        }}
+      >
+        Zoom: {Math.round(zoom * 100)}%
+      </div>
     </div>
   );
 }
