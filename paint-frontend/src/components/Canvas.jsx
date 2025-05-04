@@ -130,57 +130,111 @@ function handleSvgUpload(e) {
 }
 
 
+useEffect(() => {
+  const c = new fabric.Canvas(canvasRef.current, {
+    backgroundColor: '#ffffff',
+    selection: true,
+  });
+  canvas.current = c;
+  setZoom(c.getZoom());
+  onZoomChange?.(c.getZoom());
 
-  // 1) Canvas init, resize ve wheel zoom
-  
-  useEffect(() => {
-    const c = new fabric.Canvas(canvasRef.current, {
-      backgroundColor: '#ffffff',
-      selection: true
-    });
-    canvas.current = c;
-    setZoom(c.getZoom());
-    onZoomChange?.(c.getZoom());
+  updateLayers();
 
-    updateLayers();
+  // resize handler  
+  const onResize = () => {
+    if (!containerRef.current) return;
+    const { clientWidth: w, clientHeight: h } = containerRef.current;
+    c.setDimensions({ width: w, height: h });
+    c.renderAll();
+  };
+  onResize();
+  window.addEventListener('resize', onResize);
 
-    // resize handler  
-    const onResize = () => {
-      if (!containerRef.current) return;
-      const { clientWidth: w, clientHeight: h } = containerRef.current;
-      c.setDimensions({ width: w, height: h });
-      c.renderAll();
-    };
-    onResize();
-    window.addEventListener('resize', onResize);
+  // wheel zoom (%50–%200)  
+  const onWheel = opt => {
+    const delta = opt.e.deltaY;
+    let newZoom = c.getZoom() * (0.999 ** delta);
+    newZoom = Math.max(0.5, Math.min(newZoom, 2));
+    c.zoomToPoint({ x: opt.e.offsetX, y: opt.e.offsetY }, newZoom);
+    setZoom(newZoom);
+    onZoomChange?.(newZoom);
+    opt.e.preventDefault();
+    opt.e.stopPropagation();
+  };
+  c.on('mouse:wheel', onWheel);
 
-    // wheel zoom (%50–%200)  
-    const onWheel = opt => {
-      const delta = opt.e.deltaY;
-      let newZoom = c.getZoom() * (0.999 ** delta);
-      newZoom = Math.max(0.5, Math.min(newZoom, 2));
-      c.zoomToPoint({ x: opt.e.offsetX, y: opt.e.offsetY }, newZoom);
-      setZoom(newZoom);
-      onZoomChange?.(newZoom);
-      opt.e.preventDefault();
-      opt.e.stopPropagation();
-    };
-    c.on('mouse:wheel', onWheel);
+  // keep layers up-to-date  
+  c.on('object:added',    updateLayers);
+  c.on('object:removed',  updateLayers);
+  c.on('object:modified', updateLayers);
 
-    // keep layers up-to-date  
-    c.on('object:added',   updateLayers);
-    c.on('object:removed', updateLayers);
-    c.on('object:modified', updateLayers);
+  // ─── FabricJS polygon köşe düzenleme kontrolleri ────────────────────
+  function enablePolygonEditing(poly) {
+    // cache kapalı; editable poligonlar için önemli
+    poly.set({ objectCaching: false });
 
-    return () => {
-      window.removeEventListener('resize', onResize);
-      c.off('mouse:wheel', onWheel);
-      c.off('object:added',   updateLayers);
-      c.off('object:removed', updateLayers);
-      c.off('object:modified', updateLayers);
-      c.dispose();
-    };
-  }, [onZoomChange]);
+    // her verteks için kontrol tanımı
+    const controls = poly.points.reduce((acc, pt, idx) => {
+      acc[`p${idx}`] = new fabric.Control({
+        // köşe konumunu hesapla
+        positionHandler: (dim, finalMatrix, obj) => {
+          const point = obj.points[idx];
+          return fabric.util.transformPoint(
+            { x: point.x, y: point.y },
+            obj.calcTransformMatrix()
+          );
+        },
+        // sürükleme işlemi
+        actionHandler: (eventData, transform) => {
+          const polygon = transform.target;
+          const pointer = polygon.canvas.getPointer(eventData.e);
+          const newLocal = fabric.util.transformPoint(
+            { x: pointer.x, y: pointer.y },
+            fabric.util.invertTransform(polygon.calcTransformMatrix())
+          );
+          polygon.points[idx] = { x: newLocal.x, y: newLocal.y };
+          polygon.dirty = true;
+          return true;
+        },
+        cursorStyleHandler: () => 'move',
+        cornerSize:     10,       // tıklanabilir alan
+        withConnection: false,    // köşe-şekil çizgisini kapat
+        render:         () => {}, // hiçbir şey çizilmesin
+        actionName:    'modifyPolygon',
+      });
+      return acc;
+    }, {});
+
+    poly.controls = controls;
+    c.requestRenderAll();
+  }
+
+  // mevcut canvas’taki polygon’lara uygula
+  c.getObjects()
+   .filter(o => o.type === 'polygon')
+   .forEach(poly => enablePolygonEditing(poly));
+
+  // yeni eklenen polygon’lara uygula
+  const onObjectAdded = e => {
+    if (e.target.type === 'polygon') {
+      enablePolygonEditing(e.target);
+    }
+  };
+  c.on('object:added', onObjectAdded);
+  // ───────────────────────────────────────────────────────────────────────
+
+  return () => {
+    window.removeEventListener('resize', onResize);
+    c.off('mouse:wheel', onWheel);
+    c.off('object:added',    updateLayers);
+    c.off('object:removed',  updateLayers);
+    c.off('object:modified', updateLayers);
+    c.off('object:added',    onObjectAdded);
+    c.dispose();
+  };
+}, [onZoomChange]);
+
 
   // 2) Clear handler
   useEffect(() => {
@@ -350,34 +404,143 @@ function handleSvgUpload(e) {
         break;
       }
       case 'polygon': {
-        let poly = null, start = null;
+        const absolutePoints = [];
+        const tempMarkers = [];
+        const tempLines = [];
+        const controls = [];
+        const handleRadius = 6;
+        const finishThreshold = handleRadius;
         c.defaultCursor = 'crosshair';
-        c.on('mouse:down', e => {
-          start = c.getPointer(e.e);
-          const pts = getPolygonPoints(start.x, start.y, 0, sides);
-          poly = new fabric.Polygon(pts, {
-            fill:       'transparent',
-            stroke:     color,
-            strokeWidth,
-            selectable: false
+      
+        const onMouseDown = e => {
+          const pointer = c.getPointer(e.e);
+      
+          // Polygonu kapatma tıklaması?
+          if (absolutePoints.length >= 3) {
+            const first = absolutePoints[0];
+            if (Math.hypot(pointer.x - first.x, pointer.y - first.y) <= finishThreshold) {
+              // Geçicileri temizle
+              tempMarkers.forEach(m => c.remove(m));
+              tempLines.forEach(l => c.remove(l));
+      
+              // Bounding box hesapla
+              const xs = absolutePoints.map(p => p.x);
+              const ys = absolutePoints.map(p => p.y);
+              const minX = Math.min(...xs);
+              const minY = Math.min(...ys);
+      
+              // Relative noktalara çevir
+              const relPoints = absolutePoints.map(p => ({
+                x: p.x - minX,
+                y: p.y - minY
+              }));
+      
+              // Poligonu ekle
+              const polygon = new fabric.Polygon(relPoints, {
+                left:       minX,
+                top:        minY,
+                fill:       'transparent',
+                stroke:     color,
+                strokeWidth,
+                selectable: true
+              });
+              c.add(polygon);
+              polygon._calcDimensions();
+              polygon.setCoords();
+      
+              // Kontrol dairelerini oluştur
+              relPoints.forEach((pt, idx) => {
+                const ctrl = new fabric.Circle({
+                  left:        minX + pt.x,
+                  top:         minY + pt.y,
+                  radius:      handleRadius,
+                  fill:        'white',
+                  stroke:      color,
+                  strokeWidth: 1,
+                  originX:     'center',
+                  originY:     'center',
+                  hasBorders:  false,
+                  hasControls: false,
+                  lockRotation:true,
+                  lockScalingX:true,
+                  lockScalingY:true,
+                  evented:     true,
+                  selectable:  true
+                });
+      
+                // Sürükleme olayında: sadece poligonun noktalarını güncelle ve
+                // tüm kontrol dairelerini yeni poligon köşelerine tekrar yerleştir
+                ctrl.on('moving', () => {
+                  // 1) Yeni absolute nokta
+                  const newX = ctrl.left;
+                  const newY = ctrl.top;
+                  // 2) Relatif diziye yaz
+                  relPoints[idx] = {
+                    x: newX - polygon.left,
+                    y: newY - polygon.top
+                  };
+                  // 3) Poligonu güncelle
+                  polygon.set({ points: relPoints });
+                  polygon._calcDimensions();
+                  polygon.setCoords();
+      
+                  // 4) Tüm kontrolleri yeniden konumlandır
+                  controls.forEach((cCtrl, i) => {
+                    const p = relPoints[i];
+                    cCtrl.set({
+                      left: polygon.left + p.x,
+                      top:  polygon.top  + p.y
+                    });
+                    cCtrl.setCoords();
+                  });
+      
+                  c.renderAll();
+                });
+      
+                controls.push(ctrl);
+                c.add(ctrl);
+              });
+      
+              // Listener'ı kaldır, yeni tıklamaya izin verme
+              c.off('mouse:down', onMouseDown);
+              return;
+            }
+          }
+      
+          // Yeni nokta ekleme
+          const marker = new fabric.Circle({
+            left:        pointer.x,
+            top:         pointer.y,
+            radius:      handleRadius,
+            fill:        'white',
+            stroke:      color,
+            strokeWidth: 1,
+            originX:     'center',
+            originY:     'center',
+            selectable:  false,
+            evented:     false
           });
-          c.add(poly);
-        });
-        c.on('mouse:move', e => {
-          if (!poly) return;
-          const p = c.getPointer(e.e);
-          const r = Math.hypot(p.x - start.x, p.y - start.y);
-          poly.set({ points: getPolygonPoints(start.x, start.y, r, sides) });
-          c.renderAll();
-        });
-        c.on('mouse:up', () => {
-          if (!poly) return;
-          poly.set({ selectable: true });
-          poly.setCoords();
-          poly = null;
-        });
+          c.add(marker);
+          tempMarkers.push(marker);
+          absolutePoints.push({ x: pointer.x, y: pointer.y });
+      
+          if (absolutePoints.length > 1) {
+            const prev = absolutePoints[absolutePoints.length - 2];
+            const line = new fabric.Line([prev.x, prev.y, pointer.x, pointer.y], {
+              stroke:      color,
+              strokeWidth,
+              selectable:  false,
+              evented:     false
+            });
+            c.add(line);
+            tempLines.push(line);
+          }
+        };
+      
+        c.on('mouse:down', onMouseDown);
         break;
       }
+      
       case 'text': {
         c.defaultCursor = 'text';
         c.on('mouse:down', opt => {
