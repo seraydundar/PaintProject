@@ -110,25 +110,7 @@ export default function Toolbar({
         <span style={{ marginLeft: '4px' }}>px</span>
       </label>
 
-      {/* Polygon Kenar Sayısı */}
-      {activeTool === 'polygon' && (
-        <label className="toolbar-option">
-          <span>Kenar:</span>
-          <input
-            type="number"
-            min={3}
-            max={12}
-            value={sides}
-            onChange={e =>
-              onOptionChange({
-                ...toolOptions,
-                sides: parseInt(e.target.value, 10)
-              })
-            }
-          />
-        </label>
-      )}
-
+      
       {/* Temizle ve Kaydet/Yükle */}
       <button
         className="tool-button clear-button"

@@ -20,6 +20,8 @@ export default function Canvas({ activeTool, toolOptions, onZoomChange }) {
   const [zoom, setZoom] = useState(1);
 
     // layers state  
+  const [layersVisible, setLayersVisible] = useState(true);
+
   const [layers, setLayers] = useState([]);              // [{ index, name }]
   const [selectedLayer, setSelectedLayer] = useState(null);
   
@@ -54,6 +56,14 @@ const sendBackward = idx => {
   }
 };
 
+const deleteLayer = idx => {
+  const c = canvas.current;
+  const obj = c.getObjects()[idx];
+  if (!obj) return;
+  c.remove(obj);
+  c.renderAll();
+  updateLayers();
+};
 
 
 
@@ -686,28 +696,39 @@ useEffect(() => {
       </div>
 
       {/* —— Layer Panel —— */}
-      <div className="layers-panel">
-        <h4>Layers</h4>
-        <ul>
-          {layers.map(layer => (
-            <li
-              key={layer.index}
-              className={selectedLayer === layer.index ? 'selected' : ''}
-            >
-              <span
-                onClick={() => {
-                  selectLayer(layer.index);
-                  setSelectedLayer(layer.index);
-                }}
-              >
-                {layer.name} #{layer.index}
-              </span>
-              <button onClick={() => bringForward(layer.index)}>↑</button>
-              <button onClick={() => sendBackward(layer.index)}>↓</button>
-            </li>
-          ))}
-        </ul>
-      </div>
+      <div className={`layers-panel ${layersVisible ? 'open' : ''}`}>
+  <div
+    className="layers-panel-header"
+    onClick={() => setLayersVisible(!layersVisible)}
+  >
+    Layers {layersVisible ? '▼' : '▲'}
+  </div>
+
+  <div className="layers-panel-content">
+    <ul>
+      {layers.map(layer => (
+        <li
+          key={layer.index}
+          className={selectedLayer === layer.index ? 'selected' : ''}
+        >
+          <span
+            onClick={() => {
+              selectLayer(layer.index);
+              setSelectedLayer(layer.index);
+            }}
+          >
+            {layer.name} #{layer.index}
+          </span>
+          <button onClick={() => bringForward(layer.index)}>↑</button>
+          <button onClick={() => sendBackward(layer.index)}>↓</button>
+          <button onClick={() => deleteLayer(layer.index)}>🗑️</button>
+        </li>
+      ))}
+    </ul>
+  </div>
+</div>
+
+
   
   
 
