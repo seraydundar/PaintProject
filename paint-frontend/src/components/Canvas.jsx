@@ -2,6 +2,15 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as fabric from 'fabric';
 
+const DEFAULT_DPI = 96;
+const mmPerInch = 25.4;
+const getDPI = (toolOptions) => {
+  // Eğer toolOptions props’u ile geliyorsa kullan, yoksa DEFAULT_DPI
+  return (toolOptions && toolOptions.dpi) ? toolOptions.dpi : DEFAULT_DPI;
+};
+
+
+
 const getPolygonPoints = (cx, cy, radius, sides) => {
   const angle = (2 * Math.PI) / sides;
   return Array.from({ length: sides }).map((_, i) => ({
@@ -10,7 +19,7 @@ const getPolygonPoints = (cx, cy, radius, sides) => {
   }));
 };
 
-export default function Canvas({ activeTool, toolOptions, onZoomChange }) {
+export default function Canvas({ activeTool, onZoomChange, width, height, tool, toolOptions = {}, onChange }) {
   const containerRef = useRef(null);
   const canvasRef    = useRef(null);
   const svgInputRef  = useRef(null);
@@ -18,6 +27,9 @@ export default function Canvas({ activeTool, toolOptions, onZoomChange }) {
   const canvas       = useRef(null);
   const measurePts   = useRef([]);
   const [zoom, setZoom] = useState(1);
+
+  const [shapes, setShapes] = useState([]);
+  const [currentLine, setCurrentLine] = useState(null);
 
     // layers state  
   const [layersVisible, setLayersVisible] = useState(true);
@@ -298,21 +310,29 @@ useEffect(() => {
     };
   }, []);
 
+
   // 4) Tool logic (brush, line, rect, ellipse, polygon, text, fill, measure)
   useEffect(() => {
     const c = canvas.current;
     if (!c) return;
-
-    // Ölçüm modu sırasında şekil taşımayı devre dışı bırak
+  
+    // Ortak ayarlar
     c.selection      = activeTool === 'select';
     c.skipTargetFind = activeTool === 'measure';
     c.defaultCursor  = 'default';
     c.isDrawingMode  = false;
     ['mouse:down', 'mouse:move', 'mouse:up'].forEach(evt => c.off(evt));
     measurePts.current = [];
-
+  
+    // ToolOptions’tan gelen değerler
     const { color, strokeWidth, brushWidth, sides, fontSize, fill, scale, unit } = toolOptions;
-
+  
+    // Ölçüm için DPI ve mm→px dönüşümü
+    const dpi      = getDPI(toolOptions);
+    const targetMm = toolOptions.measureLength || 0;
+    const targetPx = targetMm > 0 ? (targetMm / mmPerInch) * dpi : 0;
+  
+    // Araçlara göre logic
     switch (activeTool) {
       case 'brush': {
         c.isDrawingMode = true;
@@ -326,11 +346,7 @@ useEffect(() => {
         let line;
         c.on('mouse:down', e => {
           const p = c.getPointer(e.e);
-          line = new fabric.Line([p.x, p.y, p.x, p.y], {
-            stroke: color,
-            strokeWidth,
-            selectable: false
-          });
+          line = new fabric.Line([p.x, p.y, p.x, p.y], { stroke: color, strokeWidth, selectable: false });
           c.add(line);
         });
         c.on('mouse:move', e => {
@@ -588,10 +604,9 @@ useEffect(() => {
         break;
       }
       case 'measure': {
-        c.defaultCursor = 'crosshair';
-        let start = null, previewLine = null, previewText = null;
-        let measureDone = false;
-
+        // Measure başlıyor
+        let start = null, previewLine = null, previewText = null, measureDone = false;
+  
         const onMouseDown = e => {
           if (measureDone) return;
           start = c.getPointer(e.e);
@@ -599,35 +614,44 @@ useEffect(() => {
             [start.x, start.y, start.x, start.y],
             { stroke: color, strokeWidth, selectable: false, evented: false }
           );
-          previewText = new fabric.Text('0 px', {
-            left:       start.x,
-            top:        start.y - 20,
-            fill:       color,
-            fontSize:   14,
-            selectable: false,
-            evented:    false
-          });
+          previewText = new fabric.Text(
+            targetMm > 0 ? `${targetMm.toFixed(2)} mm` : '0.00 mm',
+            { left: start.x, top: start.y - 20, fill: color, fontSize: 14, selectable: false, evented: false }
+          );
           c.add(previewLine);
           c.add(previewText);
         };
-
+  
         const onMouseMove = e => {
           if (!start || !previewLine) return;
           const p = c.getPointer(e.e);
-          previewLine.set({ x2: p.x, y2: p.y });
-          const dist = Math.hypot(p.x - start.x, p.y - start.y);
-          let label = `${dist.toFixed(0)} px`;
-          if (scale > 0 && unit) {
-            label += ` (${(dist / scale).toFixed(2)} ${unit})`;
+          const dx = p.x - start.x, dy = p.y - start.y;
+          let x2, y2, displayMm;
+  
+          if (targetPx) {
+            const len = Math.hypot(dx, dy);
+            if (len > 0) {
+              const ux = dx / len, uy = dy / len;
+              x2 = start.x + ux * targetPx;
+              y2 = start.y + uy * targetPx;
+            } else {
+              x2 = start.x; y2 = start.y;
+            }
+            displayMm = targetMm;
+          } else {
+            x2 = p.x; y2 = p.y;
+            displayMm = (Math.hypot(dx, dy) / dpi) * mmPerInch;
           }
+  
+          previewLine.set({ x2, y2 });
           previewText.set({
-            text:  label,
-            left:  (start.x + p.x) / 2,
-            top:   ((start.y + p.y) / 2) - 20
+            text: `${displayMm.toFixed(2)} mm`,
+            left: (start.x + x2) / 2,
+            top: ((start.y + y2) / 2) - 20
           });
           c.renderAll();
         };
-
+  
         const onMouseUp = () => {
           if (!previewLine || measureDone) return;
           previewLine.set({ selectable: true, evented: true }).setCoords();
@@ -637,24 +661,57 @@ useEffect(() => {
           c.off('mouse:move', onMouseMove);
           c.off('mouse:up', onMouseUp);
         };
-
+  
         c.on('mouse:down', onMouseDown);
         c.on('mouse:move', onMouseMove);
         c.on('mouse:up', onMouseUp);
         break;
       }
+  
       default:
         break;
-    }
-
+    } // switch sonu
+  
+    // Enter tuşu: sabit uzunlukta measure çizgisi
+    const onKeyDown = e => {
+      if (activeTool === 'measure' && e.key === 'Enter' && targetPx > 0) {
+        const startPt = { x: c.getWidth() / 2, y: c.getHeight() / 2 };
+        const endPt   = { x: startPt.x + targetPx, y: startPt.y };
+  
+        c.add(new fabric.Line(
+          [startPt.x, startPt.y, endPt.x, endPt.y],
+          { stroke: color, strokeWidth, selectable: true }
+        ));
+        c.add(new fabric.Text(
+          `${targetMm.toFixed(2)} mm`,
+          {
+            left:  (startPt.x + endPt.x) / 2,
+            top:   startPt.y - 20,
+            fill:  color,
+            fontSize: 14,
+            selectable: false,
+            evented: false
+          }
+        ));
+        c.renderAll();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+  
+    // Tek cleanup return’ü
     return () => {
-      ['mouse:down', 'mouse:move', 'mouse:up'].forEach(evt => c.off(evt));
-      c.isDrawingMode = false;
-      c.defaultCursor = 'default';
+      c.off('mouse:down');
+      c.off('mouse:move');
+      c.off('mouse:up');
+      window.removeEventListener('keydown', onKeyDown);
+      c.defaultCursor  = 'default';
       c.skipTargetFind = false;
     };
-  }, [activeTool, toolOptions]);
-
+  }, [
+    activeTool,
+    toolOptions.measureLength,
+    toolOptions.dpi
+  ]);
   // 5) Render + hidden inputs
   return (
     <div
