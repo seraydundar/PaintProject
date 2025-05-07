@@ -91,24 +91,51 @@ export default function Toolbar({
 
       {/* Boyut (slider + sayı girişi) */}
       <label className="toolbar-option">
-        <span>Boyut:</span>
-        <input
-          type="range"
-          min={1}
-          max={100}
-          value={currentSize}
-          onChange={handleSizeChange}
-        />
-        <input
-          type="number"
-          min={1}
-          max={100}
-          value={currentSize}
-          onChange={handleSizeChange}
-          style={{ width: '50px', marginLeft: '8px', padding: '2px' }}
-        />
-        <span style={{ marginLeft: '4px' }}>px</span>
-      </label>
+  <span>Boyut:</span>
+  <input
+    type="range"
+    min={1}
+    max={100}
+    value={currentSize}
+    onChange={handleSizeChange}
+  />
+  <input
+    type="number"
+    min={1}
+    max={100}
+    value={currentSize}
+    onChange={handleSizeChange}
+    style={{ width: '50px', marginLeft: '8px', padding: '2px' }}
+  />
+  {/* Sadece ölçüm aracı değilse px göster */}
+  {activeTool !== 'measure' && (
+    <span style={{ marginLeft: '4px' }}>px</span>
+  )}
+</label>
+
+     {activeTool === 'measure' && (
+       <label className="toolbar-option">
+         <span>Uzunluk (mm):</span>
+         <input
+           type="number"
+           min="0"
+           value={toolOptions.measureLength || ''}
+           onChange={e => onOptionChange({
+             ...toolOptions,
+             measureLength: parseFloat(e.target.value) || 0
+           })}
+           onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                     onOptionChange({
+                       ...toolOptions,
+                       measureTrigger: Date.now()   // tetikleyici olarak timestamp koyuyoruz
+                     });
+                  }
+                 }}
+           style={{ width: '60px', marginLeft: '8px', padding: '2px' }}
+         />
+       </label>
+     )}
 
       
       {/* Temizle ve Kaydet/Yükle */}
