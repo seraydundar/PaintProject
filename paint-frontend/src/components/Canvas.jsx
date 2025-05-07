@@ -654,35 +654,57 @@ useEffect(() => {
   
         const onMouseUp = () => {
           if (!previewLine || measureDone) return;
-          previewLine.set({ selectable: true, evented: true }).setCoords();
-          previewText.set({ selectable: true, evented: true });
+          // İlk önce ayrı nesneleri kapat
+          previewLine.set({ selectable: false, evented: false });
+          previewText.set({ selectable: false, evented: false });
+      
+          // Canvas'tan silmeden önce group için referans sakla
+          const lineCopy = previewLine;
+          const textCopy = previewText;
+      
+          // Orijinal preview nesnelerini canvas'tan kaldır
+          c.remove(previewLine);
+          c.remove(previewText);
+      
+          // Birleştirilmiş group'u oluştur
+          const measureGroup = new fabric.Group([lineCopy, textCopy], {
+            selectable: true,
+            evented: true
+          });
+          measureGroup.setCoords();
+          c.add(measureGroup);
+      
           measureDone = true;
           c.off('mouse:down', onMouseDown);
           c.off('mouse:move', onMouseMove);
           c.off('mouse:up', onMouseUp);
+          c.renderAll();
         };
-  
+      
         c.on('mouse:down', onMouseDown);
         c.on('mouse:move', onMouseMove);
         c.on('mouse:up', onMouseUp);
         break;
       }
-  
       default:
         break;
     } // switch sonu
-  
+     
+
+    
+
     // Enter tuşu: sabit uzunlukta measure çizgisi
     const onKeyDown = e => {
       if (activeTool === 'measure' && e.key === 'Enter' && targetPx > 0) {
+        // Önce ayrı ayrı eklenen line/text'i group olarak ekle
         const startPt = { x: c.getWidth() / 2, y: c.getHeight() / 2 };
         const endPt   = { x: startPt.x + targetPx, y: startPt.y };
-  
-        c.add(new fabric.Line(
+    
+        const fixedLine = new fabric.Line(
           [startPt.x, startPt.y, endPt.x, endPt.y],
-          { stroke: color, strokeWidth, selectable: true }
-        ));
-        c.add(new fabric.Text(
+          { stroke: color, strokeWidth, selectable: false, evented: false }
+        );
+        const fixedText = new fabric.Text(
           `${targetMm.toFixed(2)} mm`,
           {
             left:  (startPt.x + endPt.x) / 2,
@@ -692,11 +714,20 @@ useEffect(() => {
             selectable: false,
             evented: false
           }
-        ));
+        );
+    
+        const group = new fabric.Group([fixedLine, fixedText], {
+          selectable: true,
+          evented: true
+        });
+        group.setCoords();
+        c.add(group);
         c.renderAll();
       }
     };
+    
     window.addEventListener('keydown', onKeyDown);
+    
   
     // Tek cleanup return’ü
     return () => {
