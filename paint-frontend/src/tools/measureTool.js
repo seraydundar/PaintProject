@@ -9,13 +9,13 @@ const mmPerInch = 25.4;
  * Supports 'mm', 'cm', 'in' (inches), or 'px' (pixels) display units.
  */
 export function initMeasureTool(canvas, options) {
-  const { measureLength = 0, measureTrigger = 0, dpi, unit = 'mm' } = options;
+  const { measureLength = 0, measureTrigger = 0, dpi, unit = 'mm', color = 'black' } = options;
 
   // Static measurement: when Enter pressed
   if (measureTrigger > 0 && measureLength > 0) {
     const pxLen = convertToPixels(measureLength, unit, dpi);
     const label = `${measureLength} ${unit}`;
-    drawMeasurement(canvas, pxLen, label);
+    drawMeasurement(canvas, pxLen, label, color);
   }
 
   // Dynamic measurement variables
@@ -29,7 +29,7 @@ export function initMeasureTool(canvas, options) {
     measuring = true;
     start = canvas.getPointer(e.e);
     previewLine = new Line([start.x, start.y, start.x, start.y], {
-      stroke: 'black',
+      stroke: color,
       strokeWidth: 2,
       selectable: false,
       evented: false
@@ -37,7 +37,7 @@ export function initMeasureTool(canvas, options) {
     previewText = new Text('', {
       left: start.x,
       top: start.y - 20,
-      fill: 'black',
+      fill: color,
       fontSize: 14,
       selectable: false,
       evented: false
@@ -96,20 +96,20 @@ function convertFromPixels(px, unit, dpi) {
 }
 
 // Helper to draw static measurement
-function drawMeasurement(canvas, lengthPx, label) {
+function drawMeasurement(canvas, lengthPx, label, color) {
   const cx = canvas.getWidth() / 2;
   const cy = canvas.getHeight() / 2;
   const half = lengthPx / 2;
 
   const line = new Line([cx - half, cy, cx + half, cy], {
-    stroke: 'black', strokeWidth: 2,
+    stroke: color, strokeWidth: 2,
     selectable: true, evented: true
   });
 
   const text = new Text(label, {
     left: cx,
     top: cy - 20,
-    fill: 'black',
+    fill: color,
     fontSize: 14,
     selectable: true,
     evented: true
