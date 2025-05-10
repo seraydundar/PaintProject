@@ -25,33 +25,38 @@ export default function Canvas({ activeTool, toolOptions, onZoomChange }) {
   const [selectedLayer, setSelectedLayer]   = useState(null);
   const [zoom, setZoom]                     = useState(1);
 
-  const updateLayers = () => {
+   const updateLayers = () => {
     const c = canvas.current;
     if (!c) return;
     const objs = c.getObjects();
     setLayers(objs.map((o, i) => ({ index: i, name: o.type, obj: o })));
   };
 
-  const bringToFront = (idx) => {
-    const c = canvas.current;
-    const obj = c.getObjects()[idx];
-    if (obj) {
-      c.setActiveObject(obj);
-      c.remove(obj);
-      c.add(obj);
-      c.renderAll();
-      updateLayers();
-    }
-  };
-  
-  
+  const selectLayer = (idx) => {
+  const c = canvas.current;
+  const obj = c.getObjects()[idx];
+  if (obj) {
+    // En üste getirmek için önce kaldırıp yeniden ekle
+    c.remove(obj);
+    c.add(obj);
+    c.setActiveObject(obj);
+    c.renderAll();
+    setSelectedLayer(idx);
+    updateLayers();
+  }
+};
+
 
   const deleteLayer = (idx) => {
     const c = canvas.current;
     const obj = c.getObjects()[idx];
-    if (obj) { c.remove(obj); c.renderAll(); updateLayers(); }
+    if (obj) {
+      c.remove(obj);
+      c.renderAll();
+      setSelectedLayer(null);
+      updateLayers();
+    }
   };
-
 
   // Reset zoom to 100%
   const resetZoom = () => {
@@ -185,11 +190,12 @@ export default function Canvas({ activeTool, toolOptions, onZoomChange }) {
 
       case 'measure': {
         // 1) Dinamik ölçümü bağla
-        cleanup = initMeasureTool(c, {
+       cleanup = initMeasureTool(c, {
           measureLength:  toolOptions.measureLength,
           measureTrigger: toolOptions.measureTrigger,
           dpi,
-          unit:           toolOptions.unit || 'mm'
+          unit:           toolOptions.unit || 'mm',
+          color:          toolOptions.color
         });
 
         // 2) Sabit ölçüm: sadece uzunluk > 0 ise
@@ -230,43 +236,74 @@ export default function Canvas({ activeTool, toolOptions, onZoomChange }) {
 
 
   return (
-    <div className="canvas-wrapper">
-      <div className="canvas-and-layers" style={{ display: 'flex' }}>
-        <div className="canvas-container" ref={containerRef} style={{ flex: 1, position: 'relative' }}>
-          <canvas ref={canvasRef} />
+  <div className="canvas-wrapper">
+    <div className="canvas-and-layers" style={{ display: 'flex' }}>
+      <div
+        className="canvas-container"
+        ref={containerRef}
+        style={{ flex: 1, position: 'relative' }}
+      >
+        <canvas ref={canvasRef} />
 
-          <input
-            type="file"
-            accept=".svg"
-            ref={svgInputRef}
-            style={{ display: 'none' }}
-            onChange={(e) => handleSvgUpload(canvas.current)(e)}
-          />
-          <input
-            type="file"
-            accept="image/*"
-            ref={pngInputRef}
-            style={{ display: 'none' }}
-            onChange={(e) => handlePngUpload(canvas.current)(e)}
-          />
-        </div>
+        <input
+          type="file"
+          accept=".svg"
+          ref={svgInputRef}
+          style={{ display: 'none' }}
+          onChange={(e) => handleSvgUpload(canvas.current)(e)}
+        />
+        <input
+          type="file"
+          accept="image/*"
+          ref={pngInputRef}
+          style={{ display: 'none' }}
+          onChange={(e) => handlePngUpload(canvas.current)(e)}
+        />
+      </div>
 
-        <div className={`layers-panel ${layersVisible ? 'open' : 'closed'}`} style={{ width: 200, borderLeft: '1px solid #ccc' }}>
-          <div className="layers-panel-header" onClick={() => setLayersVisible(!layersVisible)}>
-            Layers {layersVisible ? '▼' : '▲'}
-          </div>
-          {layersVisible && (
-            <ul>
-              {layers.map((layer, idx) => (
-                <li key={layer.index}>
-                  <span onClick={() => bringToFront(idx)} style={{ cursor: 'pointer' }}>{layer.name} #{layer.index}</span>
-                  <button onClick={() => deleteLayer(idx)} style={{ marginLeft: '10px', cursor: 'pointer' }}>🗑️</button>
-                </li>
-              ))}
-            </ul>
-          )}
+      <div
+        className={`layers-panel ${layersVisible ? 'open' : 'closed'}`}
+        style={{ width: 200, borderLeft: '1px solid #ccc' }}
+      >
+        <div
+          className="layers-panel-header"
+          onClick={() => setLayersVisible(!layersVisible)}
+        >
+          Layers {layersVisible ? '▼' : '▲'}
         </div>
+        {layersVisible && (
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+            {layers.map((layer, idx) => (
+              <li
+                key={layer.index}
+                onClick={() => selectLayer(idx)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  background: selectedLayer === idx ? '#e0e0e0' : 'transparent',
+                  padding: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                <span>
+                  {layer.name} #{layer.index}
+                </span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteLayer(idx);
+                  }}
+                  title="Delete"
+                >
+                  🗑️
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
-  );
+  </div>
+);
 }
