@@ -10,7 +10,11 @@ import { initFillTool }    from '../tools/fillTool';
 import { initMeasureTool } from '../tools/measureTool';
 import { getDPI,mmPerInch }          from '../utils/fabricUtils';
 import { handlePngUpload, handleSvgUpload } from '../utils/importHandlers';
-
+//Filtreler
+import applyGrayscale, { removeGrayscale } from '../filters/grayscaleFilter';
+import applyBrightness, { removeBrightness } from '../filters/brightnessFilter';
+import applyContrast, { removeContrast } from '../filters/contrastFilter';
+import applyThreshold, { removeThreshold } from '../filters/thresholdFilter';
 
 export default function Canvas({ activeTool, toolOptions, onZoomChange }) {
   const containerRef   = useRef(null);
@@ -70,6 +74,60 @@ export default function Canvas({ activeTool, toolOptions, onZoomChange }) {
     setZoom(1);
     onZoomChange?.(1);
   };
+
+  useEffect(() => {
+  const applyFilterHandler = (e) => {
+   const detail = e.detail;
+   const key    = typeof detail === 'object' ? detail.key   : detail;
+   const value  = typeof detail === 'object' ? detail.value : undefined;
+   switch (key) {
+     case 'grayscale':
+        applyGrayscale(canvas.current);
+       break;
+     case 'brightness':
+        applyBrightness(canvas.current, value);
+       break;
+     case 'contrast':
+        applyContrast(canvas.current, value);
+       break;
+     case 'threshold':
+        applyThreshold(canvas.current, value);
+       break;
+     default:
+       console.warn('Bilinmeyen filtre:', key);
+   }
+ };
+
+
+  window.addEventListener('canvas:apply-filter', applyFilterHandler);
+
+// — yeni: undo-filter listener’ı —
+   const undoFilterHandler = (e) => {
+   const detail = e.detail;
+   const key    = typeof detail === 'object' ? detail.key : detail;
+   switch (key) {
+     case 'grayscale':
+       removeGrayscale(canvas.current);
+       break;
+     case 'brightness':
+       removeBrightness(canvas.current);
+       break;
+     case 'contrast':
+       removeContrast(canvas.current);
+       break;
+     case 'threshold':
+      removeThreshold(canvas.current);
+      break;
+   }
+ };
+   window.addEventListener('canvas:undo-filter', undoFilterHandler);
+
+
+  return () => {
+    window.removeEventListener('canvas:apply-filter', applyFilterHandler);
+    window.removeEventListener('canvas:undo-filter', undoFilterHandler);
+  };
+}, []);
 
   // 1) Fabric canvas init, wheel zoom, layer listeners & reset event
   useEffect(() => {
