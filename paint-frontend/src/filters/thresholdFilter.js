@@ -3,26 +3,27 @@ import { filters as FabricFilters } from 'fabric';
 const { BaseFilter } = FabricFilters;
 
 /**
- * Eşikleme filtresi: pixel değerlerini threshold eşiğine göre siyah/beyaza çevirir.
+ * Eşikleme filtresi: piksel değerlerini eşik değerine göre siyah/beyaza çevirir.
  */
-class ThresholdFilter extends BaseFilter {
+export class ThresholdFilter extends BaseFilter {
+  // Sınıf ismi (serileştirme için)
+  static type = 'ThresholdFilter';
+
   /**
-   * @param {Object} options
+   * @param {{ threshold?: number }} options
    * @param {number} options.threshold - 0.0 ile 1.0 arası eşik değeri
    */
   constructor({ threshold = 0.5 } = {}) {
     super();
     this.threshold = typeof threshold === 'number' ? threshold : 0.5;
-    this.type = 'ThresholdFilter';
   }
 
   /**
-   * 2D filter pipeline desteği
-   * @param {Object} options - T2DPipelineState
-   * @param {ImageData} options.imageData - üzerinde çalışılacak görüntü verisi
-   * @param {Function} options.putImageData - sonuçları yazmak için callback
+   * 2D pipeline: sadece imageData üzerinde oynar.
+   * @param {Object} options
+   * @param {ImageData} options.imageData
    */
-  applyTo2d({ imageData, putImageData }) {
+  applyTo2d({ imageData }) {
     const data = imageData.data;
     const t = this.threshold * 255;
     for (let i = 0; i < data.length; i += 4) {
@@ -30,11 +31,11 @@ class ThresholdFilter extends BaseFilter {
       const v = avg < t ? 0 : 255;
       data[i] = data[i + 1] = data[i + 2] = v;
     }
-    putImageData(imageData);
+    // putImageData çağrısına gerek yok; backend son adımda kendi yapıyor.
   }
 
   /**
-   * Serileştirme desteği
+   * Serileştirme için obje döner.
    */
   toObject() {
     return { threshold: this.threshold };
@@ -48,25 +49,25 @@ class ThresholdFilter extends BaseFilter {
   }
 }
 
-// Filtreyi Fabric koleksiyonuna ekle (readonly olabilir)
-try { FabricFilters.ThresholdFilter = ThresholdFilter; } catch (e) {}
-
 /**
- * Aktif nesneye yeni ThresholdFilter ekler
+ * Eşik filtresini aktif nesneye uygular veya günceller.
  * @param {fabric.Canvas} canvas
  * @param {number} value - 0.0 ile 1.0 arası eşik değeri
  */
-export default function applyThreshold(canvas, value = 0.5) {
+export function applyThreshold(canvas, value = 0.5) {
   const obj = canvas.getActiveObject();
-  if (!obj || obj.type !== 'image') return;
+  if (!obj || obj.type !== 'image') {
+    console.warn('Lütfen önce bir resim seçin.');
+    return;
+  }
   obj.filters = (obj.filters || []).filter(f => !(f instanceof ThresholdFilter));
   obj.filters.push(new ThresholdFilter({ threshold: value }));
   obj.applyFilters();
-  canvas.requestRenderAll();
+  canvas.renderAll();
 }
 
 /**
- * ThresholdFilter kaldırır
+ * Eşik filtresini aktif nesneden kaldırır.
  * @param {fabric.Canvas} canvas
  */
 export function removeThreshold(canvas) {
@@ -74,5 +75,7 @@ export function removeThreshold(canvas) {
   if (!obj || obj.type !== 'image') return;
   obj.filters = (obj.filters || []).filter(f => !(f instanceof ThresholdFilter));
   obj.applyFilters();
-  canvas.requestRenderAll();
+  canvas.renderAll();
 }
+
+export default applyThreshold;
