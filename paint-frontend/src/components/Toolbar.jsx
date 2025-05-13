@@ -38,6 +38,8 @@ export default function Toolbar({ activeTool, onToolChange, toolOptions, onOptio
   const [showContrastSlider, setShowContrastSlider] = useState(false);
   const [thresholdValue, setThresholdValue] = useState(0.5);
   const [showThresholdSlider, setShowThresholdSlider] = useState(false);
+  const [sharpenValue, setSharpenValue] = useState(1);
+  const [showSharpenSlider, setShowSharpenSlider] = useState(false);
 
   const { color, fill, strokeWidth, brushWidth, fontSize, sides, unit } = toolOptions;
 
@@ -333,6 +335,7 @@ const handleUndoClick = (filterKey) => {
        </div>
      );
    }
+   
 
             return (
               <div

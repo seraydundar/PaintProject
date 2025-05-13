@@ -15,6 +15,19 @@ import applyGrayscale, { removeGrayscale } from '../filters/grayscaleFilter';
 import applyBrightness, { removeBrightness } from '../filters/brightnessFilter';
 import applyContrast, { removeContrast } from '../filters/contrastFilter';
 import applyThreshold, { removeThreshold } from '../filters/thresholdFilter';
+import applySharpen, { removeSharpen } from '../filters/sharpenFilter';
+import applyBlur,       { removeBlur       } from '../filters/blurFilter';
+
+
+
+
+import { Canvas2dFilterBackend, setFilterBackend } from 'fabric';
+
+// 2D filter backend’i global olarak ayarlıyoruz:
+setFilterBackend(new Canvas2dFilterBackend());
+
+
+
 
 export default function Canvas({ activeTool, toolOptions, onZoomChange }) {
   const containerRef   = useRef(null);
@@ -93,6 +106,12 @@ export default function Canvas({ activeTool, toolOptions, onZoomChange }) {
      case 'threshold':
         applyThreshold(canvas.current, value);
        break;
+     case 'sharpen':
+        applySharpen(canvas.current, detail.value);
+       break;
+      case 'blur':
+        applyBlur(canvas.current);
+      break;
      default:
        console.warn('Bilinmeyen filtre:', key);
    }
@@ -117,6 +136,12 @@ export default function Canvas({ activeTool, toolOptions, onZoomChange }) {
        break;
      case 'threshold':
       removeThreshold(canvas.current);
+      break;
+    case 'sharpen':
+     removeSharpen(canvas.current);
+      break;
+    case 'blur':
+      removeBlur(canvas.current);
       break;
    }
  };
