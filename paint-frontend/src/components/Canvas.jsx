@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Canvas as FabricCanvas, Line, Text, Group } from 'fabric';
+import { Canvas as FabricCanvas, Line, Text, Group, Rect } from 'fabric'; 
 import { initBrushTool }   from '../tools/brushTool';
 import { initLineTool }    from '../tools/lineTool';
 import { initRectTool }    from '../tools/rectTool';
@@ -10,6 +10,7 @@ import { initFillTool }    from '../tools/fillTool';
 import { initMeasureTool } from '../tools/measureTool';
 import { getDPI,mmPerInch }          from '../utils/fabricUtils';
 import { handlePngUpload, handleSvgUpload } from '../utils/importHandlers';
+import HistogramAnalysis from './HistogramAnalysis';
 //Filtreler
 import applyGrayscale, { removeGrayscale } from '../filters/grayscaleFilter';
 import applyBrightness, { removeBrightness } from '../filters/brightnessFilter';
@@ -17,6 +18,7 @@ import applyContrast, { removeContrast } from '../filters/contrastFilter';
 import applyThreshold, { removeThreshold } from '../filters/thresholdFilter';
 import applySharpen, { removeSharpen } from '../filters/sharpenFilter';
 import applyBlur,       { removeBlur       } from '../filters/blurFilter';
+import applyCrop,       { removeCrop       } from '../filters/cropFilter';
 
 
 
@@ -36,6 +38,7 @@ export default function Canvas({ activeTool, toolOptions, onZoomChange }) {
   const cleanupRef     = useRef(null);
   const svgInputRef    = useRef(null);
   const pngInputRef    = useRef(null);
+  const cropRectRef = useRef(null);
 
   const [layersVisible, setLayersVisible]   = useState(true);
   const [layers, setLayers]                 = useState([]);
@@ -90,31 +93,95 @@ export default function Canvas({ activeTool, toolOptions, onZoomChange }) {
 
   useEffect(() => {
   const applyFilterHandler = (e) => {
-   const detail = e.detail;
-   const key    = typeof detail === 'object' ? detail.key   : detail;
-   const value  = typeof detail === 'object' ? detail.value : undefined;
-   switch (key) {
-     case 'grayscale':
-        applyGrayscale(canvas.current);
-       break;
-     case 'brightness':
-        applyBrightness(canvas.current, value);
-       break;
-     case 'contrast':
-        applyContrast(canvas.current, value);
-       break;
-     case 'threshold':
-        applyThreshold(canvas.current, value);
-       break;
-     case 'sharpen':
-        applySharpen(canvas.current, detail.value);
-       break;
-      case 'blur':
-        applyBlur(canvas.current);
+  const detail = e.detail;
+  const key    = typeof detail === 'object' ? detail.key   : detail;
+  const value  = typeof detail === 'object' ? detail.value : undefined;
+  // canvas instance’ını al ve yoksa çık
+  const c = canvas.current;
+  if (!c) return;
+  switch (key) {
+    case 'grayscale':
+      applyGrayscale(c);
       break;
-     default:
-       console.warn('Bilinmeyen filtre:', key);
-   }
+    case 'brightness':
+      applyBrightness(c, value);
+      break;
+    case 'contrast':
+      applyContrast(c, value);
+      break;
+    case 'threshold':
+      applyThreshold(c, value);
+      break;
+    case 'sharpen':
+      applySharpen(c, value);
+      break;
+    case 'blur':
+      applyBlur(c);
+      break;
+    case 'crop': {
+  const c = canvas.current;
+  if (!c) return;
+  let cropRect = cropRectRef.current;
+
+  // 1️⃣ Seçim kutusunu oluştur
+  if (!cropRect) {
+    // Önce bir resim objesi seçili mi?
+    let img = c.getActiveObject();
+    if (!img || img.type !== 'image') {
+      img = c.getObjects().find(o => o.type === 'image');
+      if (!img) {
+        console.warn('Lütfen önce bir resim ekleyin veya seçin.');
+        break;
+      }
+      c.setActiveObject(img);
+    }
+
+    // Görselin ekrandaki gerçek boyutlarını al
+    const bounds = img.getBoundingRect(true);
+
+    cropRect = new Rect({
+      left:          bounds.left,
+      top:           bounds.top,
+      width:         bounds.width,
+      height:        bounds.height,
+      fill:          'rgba(0,0,0,0.1)',
+      stroke:        'gray',
+      strokeDashArray: [4, 4],
+      selectable:    true,
+      hasControls:   true,
+      hasBorders:    true,
+      lockRotation:  true,
+      cornerColor:   'black',
+      cornerSize:    6,
+      transparentCorners: false,
+      objectCaching: false,
+    });
+
+    c.add(cropRect);
+    c.setActiveObject(cropRect);
+    cropRectRef.current = cropRect;
+    c.renderAll();
+
+  // 2️⃣ Seçim onaylandı → gerçek kırpma
+  } else {
+    const b = cropRect.getBoundingRect(true);
+    applyCrop(c, {
+      left:   Math.round(b.left),
+      top:    Math.round(b.top),
+      width:  Math.round(b.width),
+      height: Math.round(b.height)
+    });
+    c.remove(cropRect);
+    cropRectRef.current = null;
+    c.renderAll();
+  }
+
+  break;
+}
+ 
+   default:
+      console.warn('Bilinmeyen filtre:', key);
+  }
  };
 
 
@@ -142,6 +209,9 @@ export default function Canvas({ activeTool, toolOptions, onZoomChange }) {
       break;
     case 'blur':
       removeBlur(canvas.current);
+      break;
+    case 'crop':
+      removeCrop(canvas.current);
       break;
    }
  };
@@ -343,7 +413,8 @@ export default function Canvas({ activeTool, toolOptions, onZoomChange }) {
           onChange={(e) => handlePngUpload(canvas.current)(e)}
         />
       </div>
-
+          {/* Histogram Analizi Bileşeni */}
+          <HistogramAnalysis canvasRef={canvas} />
       <div
         className={`layers-panel ${layersVisible ? 'open' : 'closed'}`}
         style={{ width: 200, borderLeft: '1px solid #ccc' }}
