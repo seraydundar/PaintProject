@@ -66,7 +66,10 @@ export default function Toolbar({ activeTool, onToolChange, toolOptions, onOptio
       ? { key: 'brightness', value: brightnessValue }
       : filterKey;
   window.dispatchEvent(new CustomEvent('canvas:apply-filter', { detail }));
-  setShowFilters(false);
+  // Sadece crop değilse filtre panelini kapat
+  if (filterKey !== 'crop') {
+    setShowFilters(false);
+  }
 };
 
 const handleUndoClick = (filterKey) => {
@@ -76,6 +79,14 @@ const handleUndoClick = (filterKey) => {
   );
   setShowFilters(false);
 };
+
+//Histogram için ayrı handler
+  const handleHistogramClick = () => {
+    window.dispatchEvent(new Event('canvas:histogram'));
+    if (filterKey !== 'crop') {
+     setShowFilters(false);
+  }
+  };
 
   return (
     <div className="toolbar-container" style={{ position: 'relative' }}>
@@ -155,6 +166,7 @@ const handleUndoClick = (filterKey) => {
           </label>
         </>
       )}
+      
 
       {/* actions */}
       <button className="tool-button clear-button" onClick={onClear} data-tooltip="Temizle">
@@ -175,6 +187,7 @@ const handleUndoClick = (filterKey) => {
       <button className="tool-button" onClick={() => setShowFilters(!showFilters)} data-tooltip="Filtreler">
         🎛️
       </button>
+
 
       {/* Filtre panel */}
       {showFilters && (
@@ -216,6 +229,8 @@ const handleUndoClick = (filterKey) => {
         >
           ↩️
         </button>
+
+
         {/* 3️⃣ Slider: yalnızca butona basıldığında açılır */}
         {showBrightnessSlider && (
           <input
@@ -239,7 +254,20 @@ const handleUndoClick = (filterKey) => {
       </div>
     );
   }
-  
+   if (opt.key === 'histogram') {
+              return (
+                <div key={opt.key} style={{ display: 'flex', alignItems: 'center', marginBottom: 4 }}>
+                  <button
+                    className="filter-button"
+                    onClick={handleHistogramClick}
+                    style={{ flex: 1, textAlign: 'left', padding: '4px 8px' }}
+                  >
+                    {opt.label}
+                  </button>
+                  {/* Histogram için geri almayı desteklemiyoruz, bu yüzden burayı boş bırakabiliriz */}
+                </div>
+              );
+            }
 
   // Kontrast filtresi
   if (opt.key === 'contrast') {
