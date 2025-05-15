@@ -1,99 +1,96 @@
+// HistogramAnalysis.jsx
 import React, { useEffect, useState, useRef } from 'react';
 import Chart from 'chart.js/auto';
 
-// Bu bileşen Canvas bileşenine canvasRef prop'u ile bağlanmalı
 export default function HistogramAnalysis({ canvasRef }) {
   const [isOpen, setIsOpen] = useState(false);
   const [histData, setHistData] = useState([]);
   const chartRef = useRef(null);
-  let chartInstance = useRef(null);
+  const chartInstance = useRef(null);
 
-  // Event listener: "canvas:histogram" tetiklendiğinde histogramı hesapla
+  // 1) Event listener: histogram tetiklenince çalışacak
   useEffect(() => {
-    const handler = () => {
-      performHistogramAnalysis();
-    };
+    const handler = () => performHistogramAnalysis();
     window.addEventListener('canvas:histogram', handler);
-    return () => {
-      window.removeEventListener('canvas:histogram', handler);
-    };
+    return () => window.removeEventListener('canvas:histogram', handler);
   }, []);
 
-  // Histogram hesaplama
   const performHistogramAnalysis = () => {
-     const fabricCanvas = canvasRef.current;
-    if (!fabricCanvas || !fabricCanvas.lowerCanvasEl) {
+    const fabricCanvas = canvasRef.current;
+    if (!fabricCanvas?.lowerCanvasEl) {
       alert('Histogram yapmak için canvas bulunamadı.');
       return;
     }
-
-    // 1) Tüm çizili içeriği tutan gerçek <canvas> elementi
-    const baseCanvas = fabricCanvas.lowerCanvasEl;
-    const w = baseCanvas.width;
-    const h = baseCanvas.height;
+    const base = fabricCanvas.lowerCanvasEl;
+    const w = base.width, h = base.height;
     if (!w || !h) {
       alert(`Canvas boyutları geçersiz: ${w}×${h}`);
       return;
     }
-
-    // 2) Piksel verisini oku
-    const ctx = baseCanvas.getContext('2d');
-    const imgData = ctx.getImageData(0, 0, w, h).data;
-
-    // 3) Histogram hesapla
+    const ctx = base.getContext('2d');
+    const img = ctx.getImageData(0, 0, w, h).data;
     const histogram = new Array(256).fill(0);
-    for (let i = 0; i < imgData.length; i += 4) {
-      const gray = Math.round(0.299 * imgData[i] 
-                          + 0.587 * imgData[i+1] 
-                          + 0.114 * imgData[i+2]);
+    for (let i = 0; i < img.length; i += 4) {
+      const gray = Math.round(0.299*img[i] + 0.587*img[i+1] + 0.114*img[i+2]);
       histogram[gray]++;
     }
-
-    // 4) State’e ata ve modal’ı aç
     setHistData(histogram);
     setIsOpen(true);
   };
 
-  // Chart.js ile çubuğu çiz
+  // 2) Chart çizimi
   useEffect(() => {
-    if (isOpen && histData.length) {
-      const ctx = chartRef.current.getContext('2d');
-      if (chartInstance.current) {
-        chartInstance.current.destroy();
+    if (!isOpen || !histData.length) return;
+    const ctx = chartRef.current.getContext('2d');
+    chartInstance.current?.destroy();
+    chartInstance.current = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: Array.from({ length: 256 }, (_, i) => i),
+        datasets: [{
+          data: histData,
+          label: 'Piksel Dağılımı',
+          barPercentage: 1.0,
+          categoryPercentage: 1.0
+        }]
+      },
+      options: {
+        scales: { x: { display: false }, y: { beginAtZero: true } },
+        plugins: { legend: { display: false } },
+        animation: false
       }
-      chartInstance.current = new Chart(ctx, {
-        type: 'bar',
-        data: {
-          labels: Array.from({ length: 256 }, (_, i) => i),
-          datasets: [{
-            data: histData,
-            label: 'Piksel Dağılımı',
-            barPercentage: 1.0,
-            categoryPercentage: 1.0
-          }]
-        },
-        options: {
-          scales: {
-            x: { display: false },
-            y: { beginAtZero: true }
-          },
-          animation: false,
-          plugins: {
-            legend: { display: false }
-          }
-        }
-      });
-    }
+    });
   }, [isOpen, histData]);
 
   if (!isOpen) return null;
 
+  // 3) Tam ekran overlay olarak render et
   return (
-    <div className="histogram-modal">
-      <div className="modal-content">
-        <h3>Histogram Analizi</h3>
-        <canvas ref={chartRef} width={512} height={200}></canvas>
-        <button onClick={() => setIsOpen(false)}>Kapat</button>
+    <div
+      style={{
+        position: 'fixed', top: 0, left: 0,
+        width: '100%', height: '100%',
+        background: 'rgba(0,0,0,0.5)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        zIndex: 10000
+      }}
+    >
+      <div
+        style={{
+          background: '#fff',
+          padding: 20,
+          borderRadius: 4,
+          boxShadow: '0 2px 10px rgba(0,0,0,0.3)',
+          maxWidth: '90%',
+          maxHeight: '80%',
+          overflow: 'auto'
+        }}
+      >
+        <h3 style={{ marginTop: 0 }}>Histogram Analizi</h3>
+        <canvas ref={chartRef} width={512} height={200} />
+        <div style={{ textAlign: 'right', marginTop: 12 }}>
+          <button onClick={() => setIsOpen(false)}>Kapat</button>
+        </div>
       </div>
     </div>
   );
