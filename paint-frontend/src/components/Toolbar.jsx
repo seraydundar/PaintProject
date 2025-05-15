@@ -20,10 +20,6 @@ const FILTER_OPTIONS = [
   { key: 'threshold', label: 'Eşikleme' },
   { key: 'sharpen', label: 'Keskinleştirme' },
   { key: 'blur', label: 'Bulanıklaştırma' },
-  { key: 'filter', label: 'Filtreleme' },
-  { key: 'resize', label: 'Boyutlandırma' },
-  { key: 'rotate', label: 'Döndürme' },
-  { key: 'crop', label: 'Kırpma' },
   { key: 'histogram', label: 'Histogram Analizi' },
 ];
 
