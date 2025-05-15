@@ -83,9 +83,8 @@ const handleUndoClick = (filterKey) => {
 //Histogram için ayrı handler
   const handleHistogramClick = () => {
     window.dispatchEvent(new Event('canvas:histogram'));
-    if (filterKey !== 'crop') {
-     setShowFilters(false);
-  }
+    setShowFilters(false);
+  
   };
 
   return (
