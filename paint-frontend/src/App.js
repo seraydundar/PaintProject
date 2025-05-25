@@ -3,6 +3,7 @@ import React, { useState, useCallback } from 'react';
 import Toolbar from './components/Toolbar';
 import Canvas from './components/Canvas';
 import StatusBar from './components/StatusBar';
+import CameraFilter from './components/CameraFilter';  
 import './App.css';
 
 function App() {
@@ -33,13 +34,20 @@ function App() {
         onOptionChange={setToolOptions}
         onClear={handleClear}
       />
-       <Canvas
-       activeTool={activeTool}
-       toolOptions={toolOptions}
-       onZoomChange={setZoom}
-       />
-       <StatusBar activeTool={activeTool} zoom={zoom} />
+       {/* camera seçiliyse CameraFilter, değilse Canvas */}
+      <div className="main-content" style={{ flex: 1 }}>
+        {activeTool === 'camera' ? (
+          <CameraFilter />
+        ) : (
+          <Canvas
+            activeTool={activeTool}
+            toolOptions={toolOptions}
+            onZoomChange={setZoom}
+          />
+        )}
+      </div>
 
+      <StatusBar activeTool={activeTool} zoom={zoom} />
     </div>
   );
 }

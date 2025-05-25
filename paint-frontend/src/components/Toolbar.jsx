@@ -11,6 +11,7 @@ const TOOL_ICONS = {
   text:    '📝',
   fill:    '🎨',
   measure: '📏',
+  camera:  '📷', 
 };
 
 const FILTER_OPTIONS = [
