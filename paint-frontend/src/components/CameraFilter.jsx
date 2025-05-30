@@ -1,4 +1,3 @@
-// src/components/CameraFilter.jsx
 import React, { useEffect, useRef, useState } from 'react';
 
 export default function CameraFilter() {
@@ -55,33 +54,40 @@ export default function CameraFilter() {
     return () => cancelAnimationFrame(animId);
   }, [stream, filters]);
 
-  // 3️⃣ Toolbar’dan gelen filtre olaylarını dinle (kombine)
+  // 3️⃣ Toolbar’dan gelen filtre olaylarını dinle (kombine & undo)
   useEffect(() => {
     const applyHandler = (e) => {
       const { key, value } = typeof e.detail === 'object' ? e.detail : { key: e.detail };
       let f;
       switch (key) {
-        case 'grayscale': f = 'grayscale(100%)'; break;
-        case 'blur':      f = 'blur(5px)';       break;
+        case 'grayscale':  f = 'grayscale(100%)'; break;
+        case 'blur':       f = 'blur(5px)';       break;
         case 'brightness': f = `brightness(${1 + (value||0)})`; break;
-        case 'contrast':  f = `contrast(${1 + (value||0)})`;   break;
-        case 'invert':    f = 'invert(100%)';     break;
+        case 'contrast':   f = `contrast(${1 + (value||0)})`;   break;
+        case 'invert':     f = 'invert(100%)';     break;
         default: return;
       }
       setFilters(prev => prev.includes(f) ? prev : [...prev, f]);
     };
+
     const undoHandler = (e) => {
-      const { key, value } = typeof e.detail === 'object' ? e.detail : { key: e.detail };
-      let f;
-      switch (key) {
-        case 'grayscale': f = 'grayscale(100%)'; break;
-        case 'blur':      f = 'blur(5px)';       break;
-        case 'brightness': f = `brightness(${1 + (value||0)})`; break;
-        case 'contrast':  f = `contrast(${1 + (value||0)})`;   break;
-        case 'invert':    f = 'invert(100%)';     break;
-        default: return;
-      }
-      setFilters(prev => prev.filter(item => item !== f));
+      const { key } = typeof e.detail === 'object' ? e.detail : { key: e.detail };
+      setFilters(prev => {
+        switch (key) {
+          case 'grayscale':
+            return prev.filter(item => item !== 'grayscale(100%)');
+          case 'blur':
+            return prev.filter(item => item !== 'blur(5px)');
+          case 'invert':
+            return prev.filter(item => item !== 'invert(100%)');
+          case 'brightness':
+            return prev.filter(item => !item.startsWith('brightness('));
+          case 'contrast':
+            return prev.filter(item => !item.startsWith('contrast('));
+          default:
+            return prev;
+        }
+      });
     };
 
     window.addEventListener('canvas:apply-filter', applyHandler);
